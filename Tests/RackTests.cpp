@@ -1,5 +1,6 @@
 #include "SauceRack.h"
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
 #include <cmath>
 #include <numbers>
 #include <vector>
@@ -48,6 +49,24 @@ TEST_CASE("Space creates a stereo reverb tail") {
     rack.process(left.data(), right.data(), 48000);
     REQUIRE(energy(left, 2000) > 0.001);
     REQUIRE(left != right);
+}
+
+TEST_CASE("Space diffuses an impulse into a dense tail") {
+    sausage::Rack rack;
+    sausage::RackSettings settings;
+    settings.space = 1.0f;
+    rack.setSettings(settings);
+    rack.prepare(48000.0);
+    std::vector<float> left(48000), right(48000);
+    left[0] = right[0] = 1.0f;
+    rack.process(left.data(), right.data(), 48000);
+
+    // Undiffused combs leave energy on about 1% of samples from 50 to 150 ms. Diffusion fills about half.
+    const auto window = std::vector<float>(left.begin() + 2400, left.begin() + 7200);
+    float loudest = 0.0f;
+    for (const auto sample : window) loudest = std::max(loudest, std::abs(sample));
+    const auto audible = std::count_if(window.begin(), window.end(), [&](float sample) { return std::abs(sample) > loudest * 0.01f; });
+    REQUIRE(audible > static_cast<long>(window.size()) / 4);
 }
 
 TEST_CASE("Space bypass removes an existing reverb tail completely") {

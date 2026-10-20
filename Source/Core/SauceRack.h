@@ -32,6 +32,7 @@ private:
     RackSettings target {}, smooth {};
     std::array<Delay, 8> combs;
     std::array<float, 8> damp {};
+    std::array<std::array<Delay, 4>, 2> diffusers;
     std::array<Delay, 2> pitch, widen;
     std::array<std::array<float, Core::latency>, 2> dry {};
     double rate = 48000.0;

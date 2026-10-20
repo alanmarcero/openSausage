@@ -43,6 +43,11 @@ void Rack::prepare(double sampleRate) {
     core.prepare(rate);
     constexpr double times[] {0.0297, 0.0371, 0.0411, 0.0437, 0.0307, 0.0383, 0.0427, 0.0451};
     for (std::size_t i = 0; i < combs.size(); ++i) combs[i].resize(static_cast<std::size_t>(rate * times[i]) + 1);
+    // Freeverb allpass tunings in samples at 44.1 kHz. The right channel is 23 samples longer, for stereo spread.
+    constexpr double diffuserSamples[] {556.0, 441.0, 341.0, 225.0};
+    for (std::size_t ch = 0; ch < diffusers.size(); ++ch)
+        for (std::size_t i = 0; i < diffusers[ch].size(); ++i)
+            diffusers[ch][i].resize(static_cast<std::size_t>((diffuserSamples[i] + 23.0 * static_cast<double>(ch)) * rate / 44100.0) + 1);
     for (auto& delay : pitch) delay.resize(static_cast<std::size_t>(rate * 0.08) + 4);
     for (auto& delay : widen) delay.resize(static_cast<std::size_t>(rate * 0.04) + 4);
     reset();
@@ -50,6 +55,7 @@ void Rack::prepare(double sampleRate) {
 void Rack::reset() noexcept {
     core.reset();
     for (auto& delay : combs) delay.clear();
+    for (auto& channel : diffusers) for (auto& delay : channel) delay.clear();
     for (auto& delay : pitch) delay.clear();
     for (auto& delay : widen) delay.clear();
     damp = {}; highpass = {}; previous = {}; dry = {};
@@ -91,10 +97,21 @@ void Rack::process(float* left, float* right, int samples) noexcept {
                 combs[tap].write(mid * 0.25f + damp[tap] * feedback);
                 wet[tap / 4] += echo * 0.6f;
             }
+            // Series Schroeder allpasses, (z^-N - g) / (1 - g z^-N), turn the sparse comb echoes into a dense tail.
+            // Freeverb's version outputs delayed - input, which is not allpass and boosts some frequencies up to 4x.
+            for (std::size_t ch = 0; ch < diffusers.size(); ++ch) {
+                for (auto& allpass : diffusers[ch]) {
+                    const auto delayed = allpass.read(static_cast<float>(allpass.data.size() - 1));
+                    const auto fed = wet[ch] + 0.5f * delayed;
+                    allpass.write(fed);
+                    wet[ch] = delayed - 0.5f * fed;
+                }
+            }
             l += smooth.space * (wet[0] - l);
             r += smooth.space * (wet[1] - r);
         } else if (!spaceCleared) {
             for (auto& delay : combs) delay.clear();
+            for (auto& channel : diffusers) for (auto& delay : channel) delay.clear();
             damp = {}; spaceCleared = true;
         }
 
