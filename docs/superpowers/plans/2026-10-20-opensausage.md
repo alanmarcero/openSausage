@@ -14,6 +14,10 @@ Use openSausage consistently. Follow existing Alan Marcero plugin layouts. Test 
 
 ## Tasks
 
-- [ ] DSP: create `Source/Core/SausageCore.h/.cpp` and `Tests/CoreTests.cpp`. Write behavior tests, run against a passthrough stub to observe failures, then implement FIR oversampling, linked dynamics, Color, gain, smoothing, full independent bypasses, reverb, rising pitch, and width in SausageCore and SauceRack. Verify with `ctest --test-dir build-core --output-on-failure`.
-- [ ] Host/UI: create `Source/Plugin/PluginProcessor.h/.cpp`, `PluginEditor.h/.cpp`, `SausageLookAndFeel.h/.cpp`, and `Tools/EditorCapture.cpp`. Attach parameters, implement persistence, render generated assets with knob-reactive expression frames and per-module graphics, exercise native controls, resize placement and recall, then capture clean and driven states from the compiled editor.
+- [x] DSP: create `Source/Core/SausageCore.h/.cpp` and `Tests/CoreTests.cpp`. Write behavior tests, run against a passthrough stub to observe failures, then implement FIR oversampling, linked dynamics, Color, gain, smoothing, full independent bypasses, reverb, rising pitch, and width in SausageCore and SauceRack. Verify with `ctest --test-dir build-core --output-on-failure`.
+- [x] Host/UI: create `Source/Plugin/PluginProcessor.h/.cpp`, `PluginEditor.h/.cpp`, `SausageLookAndFeel.h/.cpp`, and `Tools/EditorCapture.cpp`. Attach parameters, implement persistence, render generated assets with knob-reactive expression frames and per-module graphics, exercise native controls, resize placement and recall, then capture clean and driven states from the compiled editor.
 - [ ] Delivery: add `.github/workflows/build.yml` and `release.yml`, README, license/third-party notes, image prompts and screenshots. Build native formats, run CTest and pluginval, review the complete change, create `alanmarcero/openSausage`, push, and inspect Actions results. Fix any failures before reporting completion.
+
+## Verification progress
+
+22 DSP cases pass in Release and under AddressSanitizer/UndefinedBehaviorSanitizer. Native capture verifies all five bypass attachments, mixed bypass state recall, parameter-driven mascot changes, and resize handles at both size limits. Initial Linux CI exposed a fractional delay wrap overflow; reproduced locally with ASan and fixed using integer index wrapping. Hosted platform rerun is pending.
