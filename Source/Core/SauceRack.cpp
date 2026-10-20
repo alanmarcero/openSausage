@@ -16,10 +16,11 @@ void Rack::Delay::resize(std::size_t size) { data.assign(size, 0.0f); position =
 void Rack::Delay::clear() noexcept { std::fill(data.begin(), data.end(), 0.0f); position = 0; }
 float Rack::Delay::read(float delay) const noexcept {
     if (data.empty()) return 0.0f;
-    auto index = static_cast<float>(position) - std::clamp(delay, 1.0f, static_cast<float>(data.size() - 1));
-    if (index < 0.0f) index += static_cast<float>(data.size());
-    const auto lower = static_cast<std::size_t>(index);
-    const auto fraction = index - static_cast<float>(lower);
+    const auto index = static_cast<double>(position) - static_cast<double>(std::clamp(delay, 1.0f, static_cast<float>(data.size() - 1)));
+    const auto base = std::floor(index);
+    // Wrap the integer index: adding the buffer length to a tiny negative float can round past its end.
+    const auto lower = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(base) + static_cast<std::ptrdiff_t>(data.size())) % data.size();
+    const auto fraction = static_cast<float>(index - base);
     return data[lower] + fraction * (data[(lower + 1) % data.size()] - data[lower]);
 }
 void Rack::Delay::write(float sample) noexcept {

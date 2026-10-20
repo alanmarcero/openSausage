@@ -23,6 +23,10 @@ if(OS_BUILD_PLUGIN)
     endif()
     juce_add_plugin(openSausage
         COMPANY_NAME "Alan Marcero"
+        COMPANY_WEBSITE "https://github.com/alanmarcero/openSausage"
+        MICROPHONE_PERMISSION_ENABLED TRUE
+        MICROPHONE_PERMISSION_TEXT "openSausage processes live audio from your selected input device."
+        COPYRIGHT "Copyright (c) 2026 Alan Marcero"
         BUNDLE_ID "com.alanmarcero.opensausage"
         PRODUCT_NAME "openSausage"
         PLUGIN_MANUFACTURER_CODE Amrc

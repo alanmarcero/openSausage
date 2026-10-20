@@ -52,6 +52,8 @@ int main(int argc, char** argv) {
         require(recipes != nullptr, "Recipe selector missing");
         recipes->setSelectedId(5, juce::sendNotificationSync);
         require(processor.parameters.getRawParameterValue("rise")->load() == 85.0f, "Recipe did not reach processor");
+        for (const auto* id : {"spaceBypass", "widthBypass"})
+            dynamic_cast<juce::TextButton*>(find(*editor, id))->setToggleState(true, juce::sendNotificationSync);
         juce::MemoryBlock state;
         processor.getStateInformation(state);
         SausageProcessor restored;
@@ -62,6 +64,8 @@ int main(int argc, char** argv) {
             require(named != nullptr, "Parameter ID missing");
             require(std::abs(parameter->getValue() - restored.parameters.getParameter(named->paramID)->getValue()) < 1.0e-6f, "Session recall failed");
         }
+        for (const auto* id : {"spaceBypass", "widthBypass"})
+            dynamic_cast<juce::TextButton*>(find(*editor, id))->setToggleState(false, juce::sendNotificationSync);
         juce::AudioBuffer<float> buffer(2, 256);
         juce::MidiBuffer midi;
         for (int block = 0; block < 200; ++block) {
