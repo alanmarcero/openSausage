@@ -2,7 +2,7 @@
 #include "BinaryData.h"
 
 namespace {
-const juce::Colour ink(0xff252921), cream(0xfff5efdc);
+const juce::Colour ink(0xffeee7d9), cream(0xffeee7d9), panel(0xf21d2528);
 juce::Image trimAlpha(const juce::Image& image) {
     int left = image.getWidth(), top = image.getHeight(), right = 0, bottom = 0;
     for (int y = 0; y < image.getHeight(); ++y)
@@ -28,7 +28,7 @@ void dial(juce::Slider& slider, const juce::String& id, juce::Colour accent) {
     slider.setColour(juce::Slider::rotarySliderFillColourId, accent);
     slider.setTextValueSuffix(" %");
     slider.setNumDecimalPlacesToDisplay(1);
-    slider.setColour(juce::Slider::textBoxTextColourId, juce::Colour(0xff252921));
+    slider.setColour(juce::Slider::textBoxTextColourId, ink);
     slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     slider.setDoubleClickReturnValue(true, id == "size" || id == "spread" ? 50.0 : 0.0);
     slider.setWantsKeyboardFocus(true);
@@ -39,8 +39,8 @@ void meter(juce::Graphics& g, const juce::String& label, float peak, int x) {
     text(g, db <= -60.0f ? "-inf dB" : juce::String(db, 1) + " dB", {x + 76, 623, 84, 20}, 11.0f, cream, juce::Font::plain, juce::Justification::centredRight);
     for (int segment = 0; segment < 23; ++segment) {
         const bool lit = db > -60.0f + static_cast<float>(segment) * 60.0f / 23.0f;
-        const auto color = segment > 20 ? juce::Colour(0xffef7353) : juce::Colour(0xffcbe27a);
-        g.setColour(lit ? color : juce::Colour(0xff42463d));
+        const auto color = segment > 20 ? juce::Colour(0xffef7353) : juce::Colour(0xff83d4c3);
+        g.setColour(lit ? color : juce::Colour(0xff313f42));
         g.fillRoundedRectangle(static_cast<float>(x + segment * 7), 651.0f, 5.0f, 15.0f, 1.0f);
     }
 }
@@ -65,20 +65,23 @@ ModulePanel::ModulePanel(juce::AudioProcessorValueTreeState& state, const juce::
 void ModulePanel::paint(juce::Graphics& g) {
     g.setColour(juce::Colours::black.withAlpha(0.16f));
     g.fillRoundedRectangle(getLocalBounds().toFloat().translated(0, 3), 8.0f);
-    g.setColour(cream); g.fillRoundedRectangle(getLocalBounds().toFloat().reduced(1), 8.0f);
-    g.setColour(ink); g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(1), 8.0f, 1.5f);
+    const auto bounds = getLocalBounds().toFloat().reduced(1);
+    g.setGradientFill(juce::ColourGradient(panel.brighter(0.08f), bounds.getTopLeft(), panel.darker(0.16f), bounds.getBottomLeft(), false));
+    g.fillRoundedRectangle(bounds, 8.0f);
+    g.setColour(accent.withAlpha(0.4f)); g.drawRoundedRectangle(bounds, 8.0f, 1.0f);
+    g.setColour(cream.withAlpha(0.06f)); g.drawHorizontalLine(2, 10.0f, bounds.getRight() - 10.0f);
     g.setColour(accent); g.fillRoundedRectangle(16.0f, 16.0f, 4.0f, 34.0f, 2.0f);
     text(g, title, {28, 16, 120, 36}, 29.0f, ink, juce::Font::bold);
-    text(g, subtitle, {20, 57, 226, 22}, 12.0f, juce::Colour(0xff777565));
-    g.setColour(juce::Colour(0xffdcd5bf)); g.drawHorizontalLine(88, 20.0f, 246.0f);
+    text(g, subtitle, {20, 57, 226, 22}, 12.0f, juce::Colour(0xffa3afaf));
+    g.setColour(juce::Colour(0xff3b4649)); g.drawHorizontalLine(88, 20.0f, 246.0f);
     text(g, primaryLabel.toUpperCase(), {20, 101, 226, 20}, 12.0f, ink, juce::Font::bold, juce::Justification::centred);
     text(g, secondaryLabel.toUpperCase(), {132, 323, 114, 24}, 12.0f, ink, juce::Font::bold);
-    g.setFont(juce::FontOptions(12.0f)); g.setColour(juce::Colour(0xff777565));
+    g.setFont(juce::FontOptions(12.0f)); g.setColour(juce::Colour(0xffa3afaf));
     g.drawFittedText(hint, {132, 350, 112, 30}, juce::Justification::topLeft, 2);
     const auto value = moduleBypass->load() > 0.5f || masterBypass->load() > 0.5f ? 0.0f : amount->load() / 100.0f;
     const auto secondaryValue = detail->load() / 100.0f;
     const auto motion = phase * value;
-    g.setColour(value > 0.0f ? accent.darker(0.2f) : juce::Colour(0xffbab6a6));
+    g.setColour(value > 0.0f ? accent.darker(0.2f) : juce::Colour(0xff546164));
     if (kind == 0) {
         juce::Path waveform;
         for (int x = 0; x <= 104; ++x) {
@@ -114,11 +117,11 @@ void ModulePanel::resized() {
 }
 SausageEditor::SausageEditor(SausageProcessor& owner)
     : AudioProcessorEditor(owner), ownerProcessor(owner),
-      enamel(juce::ImageCache::getFromMemory(BinaryData::enamel_png, BinaryData::enamel_pngSize)),
-      sausagePanel(owner.parameters, "Sausage", "SATURATION + COMPRESSION", "fatness", "Fatness", "color", "Color", "sausageBypass", juce::Colour(0xffe27942), "Warm weight to full-on crunch."),
-      spacePanel(owner.parameters, "Space", "STEREO REVERB", "space", "Mix", "size", "Size", "spaceBypass", juce::Colour(0xff71ad93), "Small rooms. Big atmospheres."),
-      risePanel(owner.parameters, "Rise", "PITCH + BUILDUP", "rise", "Rise", "riseMix", "Mix", "riseBypass", juce::Colour(0xffa195d0), "Lift the pitch. Build the tension."),
-      widthPanel(owner.parameters, "Width", "STEREO WIDENER", "width", "Width", "spread", "Spread", "widthBypass", juce::Colour(0xff76a9d2), "Give your sound some elbow room."),
+      enamel(juce::ImageCache::getFromMemory(BinaryData::analogcyberfaceplate_png, BinaryData::analogcyberfaceplate_pngSize)),
+      sausagePanel(owner.parameters, "Sausage", "SATURATION + COMPRESSION", "fatness", "Fatness", "color", "Color", "sausageBypass", juce::Colour(0xffdaab7b), "Warm weight to full-on crunch."),
+      spacePanel(owner.parameters, "Space", "STEREO REVERB", "space", "Mix", "size", "Size", "spaceBypass", juce::Colour(0xff87c8b8), "Small rooms. Big atmospheres."),
+      risePanel(owner.parameters, "Rise", "PITCH + BUILDUP", "rise", "Rise", "riseMix", "Mix", "riseBypass", juce::Colour(0xffb1a4cf), "Lift the pitch. Build the tension."),
+      widthPanel(owner.parameters, "Width", "STEREO WIDENER", "width", "Width", "spread", "Spread", "widthBypass", juce::Colour(0xff89becf), "Give your sound some elbow room."),
       outputAttachment(owner.parameters, "output", output), bypassAttachment(owner.parameters, "bypass", bypass) {
     setLookAndFeel(&look);
     const auto sheet = juce::ImageCache::getFromMemory(BinaryData::sausageexpressions_png, BinaryData::sausageexpressions_pngSize);
@@ -151,30 +154,32 @@ void SausageEditor::timerCallback() {
 }
 void SausageEditor::paint(juce::Graphics& g) {
     g.addTransform(juce::AffineTransform::scale(static_cast<float>(getWidth()) / 1160.0f));
-    g.fillAll(juce::Colour(0xffe6bb51));
+    g.fillAll(juce::Colour(0xff101719));
     g.drawImage(enamel, juce::Rectangle<float>(0, 0, 1160, 720), juce::RectanglePlacement::stretchToFit);
-    g.setColour(juce::Colour(0xfff6d477).withAlpha(0.55f)); g.fillRect(0, 0, 1160, 609);
+    g.setColour(juce::Colour(0xff101719).withAlpha(0.24f)); g.fillRect(0, 0, 1160, 609);
     const bool sausageBypassed = ownerProcessor.parameters.getRawParameterValue("sausageBypass")->load() > 0.5f
                              || ownerProcessor.parameters.getRawParameterValue("bypass")->load() > 0.5f;
     const auto fat = sausageBypassed ? 0.0f : ownerProcessor.parameters.getRawParameterValue("fatness")->load() / 100.0f;
     const auto frame = fat < 0.4f ? 0 : fat < 0.75f ? 1 : 2;
     const auto bodyWidth = 94.0f + fat * 26.0f;
     const auto bounce = std::sin(animationPhase) * fat * 3.0f;
+    g.setOpacity(1.0f);
     g.drawImage(faces[static_cast<std::size_t>(frame)], juce::Rectangle<float>(99.0f - bodyWidth * 0.5f, 9.0f + bounce, bodyWidth, 145.0f + fat * 4.0f), juce::RectanglePlacement::stretchToFit);
     text(g, "openSausage", {186, 23, 650, 66}, 60.0f, ink, juce::Font::bold);
-    text(g, "FOUR FLAVOURS. ONE FAT SOUND.", {190, 94, 650, 25}, 14.0f, ink, juce::Font::bold);
-    text(g, "Saturate. Make space. Lift it up. Spread it out.", {190, 121, 650, 20}, 13.0f, juce::Colour(0xff655c3e));
+    text(g, "Saturation / Space / Pitch / Stereo", {190, 94, 650, 25}, 14.0f, ink, juce::Font::bold);
+    text(g, "Saturate. Make space. Lift it up. Spread it out.", {190, 121, 650, 20}, 13.0f, juce::Colour(0xffa9b6b7));
     text(g, "ALAN MARCERO", {930, 31, 196, 24}, 15.0f, ink, juce::Font::bold, juce::Justification::centredRight);
-    text(g, "AUDIO TOOLS / No. 04", {930, 57, 196, 20}, 11.0f, juce::Colour(0xff655c3e), juce::Font::plain, juce::Justification::centredRight);
-    g.setColour(ink); g.fillRect(0, 609, 1160, 111);
+    text(g, "AUDIO TOOLS / No. 04", {930, 57, 196, 20}, 11.0f, juce::Colour(0xffa9b6b7), juce::Font::plain, juce::Justification::centredRight);
+    g.setColour(juce::Colour(0xf00c1418)); g.fillRect(0, 609, 1160, 111);
+    g.setColour(juce::Colour(0xffdaab7b).withAlpha(0.4f)); g.drawHorizontalLine(609, 24, 1136);
     meter(g, "INPUT", ownerProcessor.inputPeak.load(std::memory_order_relaxed), 30);
     meter(g, "OUTPUT", ownerProcessor.outputPeak.load(std::memory_order_relaxed), 224);
     text(g, "OUTPUT TRIM", {425, 638, 120, 22}, 12.0f, cream, juce::Font::bold);
     text(g, "COMPRESSION", {687, 623, 174, 22}, 11.0f, cream, juce::Font::bold);
     text(g, juce::String(ownerProcessor.gainReduction.load(std::memory_order_relaxed), 1) + " dB", {687, 646, 174, 28}, 22.0f, juce::Colour(0xffe9c65d), juce::Font::bold);
-    g.setColour(juce::Colour(0xff44483d)); g.drawHorizontalLine(687, 24, 1136);
-    text(g, "SIGNAL FLOW   SAUSAGE  >  SPACE  >  RISE  >  WIDTH  >  OUTPUT", {30, 693, 760, 20}, 10.0f, juce::Colour(0xffa9ad9b));
-    text(g, "4x SATURATION  /  v1.0.0", {880, 693, 246, 20}, 10.0f, juce::Colour(0xffa9ad9b), juce::Font::plain, juce::Justification::centredRight);
+    g.setColour(juce::Colour(0xff3b474a)); g.drawHorizontalLine(687, 24, 1136);
+    text(g, "SIGNAL FLOW   SAUSAGE  >  SPACE  >  RISE  >  WIDTH  >  OUTPUT", {30, 693, 760, 20}, 10.0f, juce::Colour(0xffa0adb0));
+    text(g, "4x SATURATION  /  v1.0.0", {880, 693, 246, 20}, 10.0f, juce::Colour(0xffa0adb0), juce::Font::plain, juce::Justification::centredRight);
     for (const auto point : {juce::Point<float>(10, 10), juce::Point<float>(1150, 10), juce::Point<float>(10, 600), juce::Point<float>(1150, 600)}) {
         g.setColour(ink.withAlpha(0.45f)); g.fillEllipse(point.x - 3, point.y - 3, 6, 6);
         g.setColour(juce::Colour(0xffd8b15a)); g.drawLine(point.x - 2, point.y, point.x + 2, point.y, 1);

@@ -5,7 +5,7 @@
 
 **Saturation, reverb, rising pitch, and stereo width. Four effects in one native plugin.**
 
-![openSausage running the Lift off recipe, with all four effects visible](docs/screenshots/openSausage-lift-off.png)
+![Actual openSausage editor with all four effects visible](assets/analog-cyber-preview.png)
 
 openSausage combines the two-knob saturation workflow of **Sausage Fattener** with original implementations of the three effect types in **Secret Sauce**: Space In-Your-Face, Eternal Return, and Wide Awake Rainbow. Turn up the heat, add a room, lift the pitch, and stretch the stereo field without opening four plugin windows.
 
