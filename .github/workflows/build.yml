@@ -64,7 +64,7 @@ jobs:
           cp -R "$ARTEFACTS/VST3/openSausage.vst3" package/VST3/
           cp -R "$ARTEFACTS/AU/openSausage.component" package/AU/
           cp -R "$ARTEFACTS/Standalone/openSausage.app" package/Standalone/
-          cp README.md LICENSE THIRD_PARTY.md package/
+          python3 scripts/package_notices.py package
           ditto -c -k --keepParent package openSausage-macOS-universal.zip
       - uses: actions/upload-artifact@v4
         with:
@@ -101,7 +101,8 @@ jobs:
           New-Item -ItemType Directory -Force package/VST3, package/Standalone | Out-Null
           Copy-Item -Recurse "$env:ARTEFACTS/VST3/openSausage.vst3" package/VST3/
           Copy-Item "$env:ARTEFACTS/Standalone/openSausage.exe" package/Standalone/
-          Copy-Item README.md, LICENSE, THIRD_PARTY.md package/
+          python scripts/package_notices.py package
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Compress-Archive -Path package -DestinationPath openSausage-Windows-x64.zip
       - uses: actions/upload-artifact@v4
         with:
