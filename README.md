@@ -1,11 +1,15 @@
 # openSausage
 
+[Install with OpenVST Manager](https://github.com/alanmarcero/alan-m-OpenVSTManager/releases/latest)
+
 [![build](https://github.com/alanmarcero/openSausage/actions/workflows/build.yml/badge.svg)](https://github.com/alanmarcero/openSausage/actions/workflows/build.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
 **Saturation, reverb, rising pitch, and stereo width. Four effects in one native plugin.**
 
-![Actual openSausage editor with all four effects visible](assets/analog-cyber-preview.png)
+![openSausage native editor](assets/native-ui.png)
+
+*Captured from the released v1.1.0 VST3 editor. [Capture details and provenance](docs/SCREENSHOTS.md).*
 
 openSausage combines the two-knob saturation workflow of **Sausage Fattener** with original implementations of the three effect types in **Secret Sauce**: Space In-Your-Face, Eternal Return, and Wide Awake Rainbow. Turn up the heat, add a room, lift the pitch, and stretch the stereo field without opening four plugin windows.
 
@@ -24,17 +28,11 @@ The chain runs **Sausage → Space → Rise → Width → Output**. All four can
 
 **Master bypass** skips the complete chain, including output trim, while preserving latency. **Output** trims the processed signal from −24 to +12 dB. Levels are not automatically limited; use the output meter and trim to keep headroom.
 
-![All four sections individually bypassed](docs/screenshots/openSausage-bypassed.png)
-
 ## A sausage with an attitude
 
 Fatness changes the mascot from a cheeky grin to a furious expression, fattens its body, and adds movement. The four sections also have reactive graphics: a saturating waveform, expanding reverb rings, rising arrows, and a widening stereo display. These read the same parameters as the DSP, so presets and host automation animate them too. Bypassed sections return to their resting graphics.
 
-| Clean slate | Full heat |
-| --- | --- |
-| ![Calm mascot at zero Fatness](docs/screenshots/openSausage-clean.png) | ![Aggressive mascot at maximum Fatness](docs/screenshots/openSausage-rage.png) |
-
-The mascot expressions and enamel texture are generated artwork embedded in the plugin. These screenshots are captured from the compiled JUCE editor, not interface mockups. Generation prompts are in [assets/PROMPTS.md](assets/PROMPTS.md).
+The mascot expressions and metal faceplate are generated artwork embedded in the plugin. Generation prompts are in [assets/PROMPTS.md](assets/PROMPTS.md).
 
 ## Use it
 
@@ -47,7 +45,12 @@ Mono and stereo layouts are supported. Width needs a stereo output; on a mono tr
 
 ## Download and install
 
-Build packages are available under **Artifacts** on a successful [Actions run](https://github.com/alanmarcero/openSausage/actions/workflows/build.yml). Tagged builds are published to [Releases](https://github.com/alanmarcero/openSausage/releases).
+1. Download and install [OpenVST Manager](https://github.com/alanmarcero/alan-m-OpenVSTManager/releases/latest) for macOS or Windows.
+2. Open the manager and refresh the catalog.
+3. Choose **openSausage**, select **VST3** (or **AU** on macOS), and install.
+4. Rescan plugins in your DAW. If you chose a custom install folder, add it to the DAW's search paths.
+
+Build packages are available under **Artifacts** on a successful [Actions run](https://github.com/alanmarcero/openSausage/actions/workflows/build.yml). The [v1.1.0 release](https://github.com/alanmarcero/openSausage/releases/tag/v1.1.0) contains the formats listed below.
 
 | Platform | Package contents | Install location |
 | --- | --- | --- |
@@ -102,8 +105,9 @@ Source/Core/       Pure C++ saturation and four-effect rack
 Source/Plugin/     JUCE processor, parameters, editor, and knob drawing
 Tests/             Audio behavior tests
 Tools/             Native editor interaction and screenshot harness
-assets/            Generated texture, mascot, expression sheet, and prompts
-docs/screenshots/  Captures of the compiled editor
+assets/            Embedded faceplate, mascot expressions, and released-editor capture
+docs/SCREENSHOTS.md Released-editor capture provenance
+docs/screenshots/  Earlier development captures
 .github/workflows/ Build, validation, packaging, and tag releases
 ```
 
