@@ -1,3 +1,25 @@
+# Verification — v1.2.0, 2026-10-27
+
+Global algorithm sets: Classic, Velvet, Punch, and Prism.
+
+| Local macOS check | Result |
+| --- | --- |
+| Release DSP suite, including all four modes | 29/29 passed |
+| AddressSanitizer / UndefinedBehaviorSanitizer DSP suite | 29/29 passed |
+| Native VST3, AU, standalone, and editor harness build | Passed (arm64) |
+| VST3 pluginval 1.0.4, strictness 5 | Passed |
+| Selector, distinct audio for every choice, host automation, recipe preservation | Passed |
+| Session audio recall, reopened editor, old-session fallback to Classic | Passed |
+| Default, per-mode, bypassed, and minimum-size native screenshots | Captured and inspected |
+| Classic comparison with 85ba290 across five rates, mono/stereo and parameter/bypass changes | Bit-identical for 614,400 compared output bytes |
+| Independent rapid-switch probe | 1,270,240 samples; zero intercepted C++ allocations or nonfinite outputs |
+
+The ADAA regression measures the folded third harmonic against direct shaping on a coherent high-frequency sine; amplitude ratios were 0.129 (Velvet), 0.170 (Punch), and 0.069 (Prism). This verifies the algorithm on that signal, not an alias-free guarantee for arbitrary audio. Existing Classic behavior remains the default for old sessions. Tests also cover repeated inputs, clip boundaries, latest-choice switching in mono/stereo, neutral and bypassed delay alignment, and block-size independence.
+
+The tag workflow builds and validates the macOS universal and Windows x64 packages before publishing [v1.2.0](https://github.com/alanmarcero/openSausage/releases/tag/v1.2.0). The local run did not perform a listening assessment or a DAW/AU host test. Algorithm sources and tradeoffs are in [ALGORITHMS.md](ALGORITHMS.md).
+
+---
+
 # Verification — 2026-10-20
 
 Verified implementation: `b3f85bfa39deef2ff4534ecef0d98a225deaa2b9`.

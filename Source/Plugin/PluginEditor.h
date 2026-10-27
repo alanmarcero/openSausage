@@ -17,6 +17,7 @@ private:
     std::atomic<float>* detail;
     std::atomic<float>* moduleBypass;
     std::atomic<float>* masterBypass;
+    std::atomic<float>* algorithm;
     int kind = 0;
     float phase = 0.0f;
     juce::Slider primary, secondary;
@@ -41,7 +42,8 @@ private:
     ModulePanel sausagePanel, spacePanel, risePanel, widthPanel;
     juce::Slider output;
     juce::TextButton bypass;
-    juce::ComboBox recipes;
+    juce::ComboBox recipes, algorithms;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> algorithmAttachment;
     juce::AudioProcessorValueTreeState::SliderAttachment outputAttachment;
     juce::AudioProcessorValueTreeState::ButtonAttachment bypassAttachment;
     juce::TooltipWindow tooltip {this, 500};

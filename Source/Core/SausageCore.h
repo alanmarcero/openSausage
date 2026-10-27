@@ -1,4 +1,6 @@
 #pragma once
+#include "Algorithm.h"
+#include "Waveshaper.h"
 #include <array>
 #include <cstddef>
 
@@ -8,6 +10,7 @@ struct Settings {
     float color = 0.0f;
     float outputDb = 0.0f;
     bool bypass = false;
+    Algorithm algorithm = Algorithm::Classic;
 };
 
 class Core {
@@ -26,6 +29,7 @@ private:
     };
     struct Channel {
         Fir up, down;
+        Waveshaper shaper;
         std::array<float, latency> dry {};
         float low = 0.0f, dcInput = 0.0f, dcOutput = 0.0f;
     };

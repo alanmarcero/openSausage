@@ -28,7 +28,7 @@ float Core::Fir::tick(float input, const std::array<float, 65>& taps) noexcept {
 void Core::setSettings(Settings settings) noexcept {
     target = {std::clamp(finite(settings.fatness), 0.0f, 1.0f),
               std::clamp(finite(settings.color), 0.0f, 1.0f),
-              std::clamp(finite(settings.outputDb), -24.0f, 12.0f), settings.bypass};
+              std::clamp(finite(settings.outputDb), -24.0f, 12.0f), settings.bypass, validAlgorithm(settings.algorithm)};
 }
 
 void Core::prepare(double sampleRate) noexcept {
@@ -84,7 +84,7 @@ void Core::process(float* left, float* right, int samples) noexcept {
                 const auto up = state.up.tick(sub == 0 ? input[ch] * 4.0f : 0.0f, coefficients);
                 state.low = up + tonePole * (state.low - up);
                 const auto colored = up + current.color * 2.5f * (up - state.low);
-                const auto shaped = std::tanh(colored * compression * drive);
+                const auto shaped = state.shaper.process(colored * compression * drive, target.algorithm);
                 const auto saturated = colored + current.fatness * (shaped - colored);
                 const auto dc = saturated - state.dcInput + dcPole * state.dcOutput;
                 state.dcInput = saturated;

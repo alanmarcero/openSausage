@@ -30,7 +30,7 @@ public:
     std::atomic<float> inputPeak {0.0f}, outputPeak {0.0f}, gainReduction {0.0f};
 private:
     sausage::Rack rack;
-    std::array<std::atomic<float>*, 14> values {};
+    std::array<std::atomic<float>*, 15> values {};
     sausage::RackSettings settings(bool hostBypassed = false) const noexcept;
     void process(juce::AudioBuffer<float>&, bool hostBypassed);
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SausageProcessor)

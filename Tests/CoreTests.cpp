@@ -3,6 +3,7 @@
 #include <catch2/catch_approx.hpp>
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <limits>
 #include <numbers>
 #include <vector>
@@ -171,4 +172,40 @@ TEST_CASE("Empty blocks and disconnected input are harmless") {
     float sample = 0.5f;
     core.process(&sample, nullptr, 0);
     REQUIRE(sample == 0.5f);
+}
+
+TEST_CASE("Antiderivative shapers handle repeated inputs and clipping boundaries") {
+    for (const auto mode : {sausage::Algorithm::Velvet, sausage::Algorithm::Punch, sausage::Algorithm::Prism}) {
+        sausage::Waveshaper shaper;
+        for (const auto x : {-10.0f, -1.0f, -1.0e-6f, 0.0f, 1.0e-6f, 1.0f, 10.0f}) {
+            REQUIRE(std::isfinite(shaper.process(x, mode)));
+            const auto expected = mode == sausage::Algorithm::Velvet ? 2.0f / std::numbers::pi_v<float> * std::atan(x)
+                : mode == sausage::Algorithm::Punch ? std::clamp(x, -1.0f, 1.0f) : std::sin(x);
+            REQUIRE(std::abs(shaper.process(x, mode) - expected) < 1.0e-6f);
+        }
+    }
+    sausage::Waveshaper clip;
+    REQUIRE(clip.process(2.0f, sausage::Algorithm::Punch) == 0.75f);
+    REQUIRE(clip.process(-2.0f, sausage::Algorithm::Punch) == 0.0f);
+}
+
+TEST_CASE("Antiderivative shapers suppress a folded third harmonic relative to direct shaping") {
+    constexpr int size = 4096, fundamental = 997, alias = size - 3 * fundamental;
+    for (const auto mode : {sausage::Algorithm::Velvet, sausage::Algorithm::Punch, sausage::Algorithm::Prism}) {
+        sausage::Waveshaper shaper;
+        std::complex<double> antialiased {}, direct {};
+        for (int i = -size; i < size; ++i) {
+            const auto x = static_cast<float>(3.0 * std::sin(2.0 * std::numbers::pi * fundamental * i / size));
+            const auto y = shaper.process(x, mode);
+            const auto raw = mode == sausage::Algorithm::Velvet ? 2.0 / std::numbers::pi * std::atan(x)
+                : mode == sausage::Algorithm::Punch ? std::clamp(x, -1.0f, 1.0f) : std::sin(x);
+            if (i >= 0) {
+                const auto basis = std::polar(1.0, -2.0 * std::numbers::pi * alias * i / size);
+                antialiased += basis * static_cast<double>(y);
+                direct += basis * raw;
+            }
+        }
+        REQUIRE(std::abs(direct) > 1.0);
+        REQUIRE(std::abs(antialiased) < 0.3 * std::abs(direct));
+    }
 }

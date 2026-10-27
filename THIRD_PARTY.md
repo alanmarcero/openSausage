@@ -6,3 +6,5 @@
 - **Artwork**: `assets/sausage.png`, `assets/sausage-expressions.png`, and `assets/enamel.png` were generated for openSausage using the built-in image generation tool. Prompts are recorded in `assets/PROMPTS.md` and `assets/EXPRESSION-PROMPT.md`.
 
 openSausage is an independent implementation inspired by the workflows of Sausage Fattener and the Secret Sauce bundle (Space In-Your-Face, Eternal Return, Wide Awake Rainbow). No original plugin code, binaries, artwork, or branding are included. Those product names belong to their respective owners. This project is not affiliated with Dada Life or Tailored Noise and does not claim sonic equivalence.
+
+The additional DSP modes are original implementations of published signal-processing methods. References and the distinction between source techniques and our adaptations are listed in [docs/ALGORITHMS.md](docs/ALGORITHMS.md). No third-party DSP code or runtime dependencies were added.

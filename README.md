@@ -9,7 +9,7 @@
 
 ![openSausage native editor](assets/native-ui.png)
 
-*Captured from the released v1.1.0 VST3 editor. [Capture details and provenance](docs/SCREENSHOTS.md).*
+*Captured from the compiled v1.2.0 native editor with Prism selected. [Capture details and provenance](docs/SCREENSHOTS.md).*
 
 openSausage combines the two-knob saturation workflow of **Sausage Fattener** with original implementations of the three effect types in **Secret Sauce**: Space In-Your-Face, Eternal Return, and Wide Awake Rainbow. Turn up the heat, add a room, lift the pitch, and stretch the stereo field without opening four plugin windows.
 
@@ -21,12 +21,27 @@ Built by Alan Marcero with C++20 and JUCE 8, following [openGlitchFX](https://gi
 | --- | --- | --- |
 | **Sausage** | Fatness · Color | Stereo-linked compression and 4× oversampled saturation, with high-frequency emphasis. |
 | **Space** | Mix · Size | Stereo reverb, from short rooms to long diffuse tails. Size sets the decay. |
-| **Rise** | Rise · Mix | Dual-head pitch shifting up to an octave, high-pass lift, and recirculating pitch feedback. Automate Rise for buildups. |
-| **Width** | Width · Spread | Mid/side expansion plus decorrelation that creates stereo information from a mono source. Spread changes the delay spacing. |
+| **Rise** | Rise · Mix | Windowed pitch shifting up to an octave, high-pass lift, and recirculating pitch feedback. Automate Rise for buildups. |
+| **Width** | Width · Spread | Mid/side expansion plus decorrelation that creates stereo information from a mono source. Spread changes the delay spacing or allpass response. |
 
 The chain runs **Sausage → Space → Rise → Width → Output**. All four can run together or be bypassed independently. Click **ACTIVE** to put a section into **BYPASSED**. After a short smoothed transition, a bypassed section passes its incoming signal unchanged, removes its wet signal and tails, and leaves the other sections running. Reverb and delay buffers clear when their fade completes.
 
 **Master bypass** skips the complete chain, including output trim, while preserving latency. **Output** trims the processed signal from −24 to +12 dB. Levels are not automatically limited; use the output meter and trim to keep headroom.
+
+## Four matching algorithm sets
+
+Use **Global Algorithm**, beside the recipe menu, to change the character of all four sections together. Knobs and bypass switches stay where you left them. Recipes adjust the controls within your selected algorithm set.
+
+| Algorithm | Sausage | Space | Rise | Width |
+| --- | --- | --- | --- | --- |
+| **Classic** | Original tanh saturation | Original Schroeder room | Original dual-head pitch shift | Original delay decorrelation |
+| **Velvet** | Antialiased atan saturation | Damped Householder feedback hall | Four overlapping, longer grains | Cascaded allpass decorrelation |
+| **Punch** | Antialiased hard clipping | Short, fast-decaying room | Short triangular grains | Expansion above 250 Hz |
+| **Prism** | Antialiased sine wavefolding | Brighter Hadamard feedback hall | Four grains with stereo cross-feedback | Slowly modulated delay decorrelation |
+
+The selector is automatable and saved with your session. Switching crossfades over 20 ms after priming the new engine's dry delay; the previous mode's tails fade out. Rapid changes settle on the latest choice. Existing sessions open in Classic. All modes retain the same controls, mono support, independent bypasses, and 16-sample host latency.
+
+The new saturation curves combine first-order antiderivative antialiasing with the existing 4× oversampling. These are original implementations of published techniques, with tuning chosen for each mode. See [algorithm sources and implementation notes](docs/ALGORITHMS.md) for equations, references, and tradeoffs.
 
 ## A sausage with an attitude
 
@@ -37,7 +52,7 @@ The mascot expressions and metal faceplate are generated artwork embedded in the
 ## Use it
 
 1. Insert openSausage on an audio track or bus. It starts neutral.
-2. Choose a recipe or turn up one section at a time. **Gentle heat**, **Wide drums**, **In orbit**, and **Lift off** provide starting points; **Clean slate** resets everything. Selecting a recipe also re-enables the sections and master processing.
+2. Choose a global algorithm, then a recipe or turn up one section at a time. **Gentle heat**, **Wide drums**, **In orbit**, and **Lift off** provide starting points; **Clean slate** resets the controls within the selected algorithm. Selecting a recipe also re-enables the sections and master processing.
 3. Automate any knob or bypass switch in your DAW. Settings are saved with the session.
 4. Drag a knob to adjust it, double-click to reset it, or click its value to enter a number. Hover for help. Resize the editor from its corner.
 
@@ -87,7 +102,7 @@ Capture the real editor and run the native control/session checks:
 build/sausage_editor_capture_artefacts/Release/sausage_editor_capture docs/screenshots
 ```
 
-On Windows, append `.exe`. The harness exercises knobs, all five bypass switches, recipes, parameter recall, audio processing, parameter-driven mascot changes, and editor resizing before saving screenshots.
+On Windows, append `.exe`. The harness exercises all four algorithm choices, host automation, legacy and current session recall, recipes, knobs, all five bypass switches, audio processing, parameter-driven mascot changes, and editor resizing before saving screenshots.
 
 ## Pipelines and verification
 

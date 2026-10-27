@@ -2,7 +2,7 @@
 #include "PluginEditor.h"
 
 namespace {
-constexpr const char* ids[] {"fatness", "color", "space", "size", "rise", "riseMix", "width", "spread", "output", "sausageBypass", "spaceBypass", "riseBypass", "widthBypass", "bypass"};
+constexpr const char* ids[] {"fatness", "color", "space", "size", "rise", "riseMix", "width", "spread", "output", "sausageBypass", "spaceBypass", "riseBypass", "widthBypass", "bypass", "algorithm"};
 juce::AudioProcessorValueTreeState::ParameterLayout layout() {
     juce::AudioProcessorValueTreeState::ParameterLayout result;
     const char* names[] {"Fatness", "Color", "Space Mix", "Space Size", "Rise Amount", "Rise Mix", "Width Amount", "Width Spread"};
@@ -11,6 +11,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout layout() {
     result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("output", 1), "Output", juce::NormalisableRange<float>(-24.0f, 12.0f, 0.1f), 0.0f));
     const char* switches[] {"Sausage Bypass", "Space Bypass", "Rise Bypass", "Width Bypass", "Master Bypass"};
     for (int i = 0; i < 5; ++i) result.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ids[i + 9], 1), switches[i], false));
+    juce::StringArray algorithms;
+    for (const auto* name : sausage::algorithmNames) algorithms.add(name);
+    result.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("algorithm", 2), "Global Algorithm", algorithms, 0));
     return result;
 }
 }
@@ -24,7 +27,7 @@ sausage::RackSettings SausageProcessor::settings(bool hostBypassed) const noexce
     auto value = [this](std::size_t i) { return values[i]->load(std::memory_order_relaxed); };
     return {value(0) / 100.0f, value(1) / 100.0f, value(2) / 100.0f, value(3) / 100.0f,
             value(4) / 100.0f, value(5) / 100.0f, value(6) / 100.0f, value(7) / 100.0f, value(8),
-            value(9) < 0.5f, value(10) < 0.5f, value(11) < 0.5f, value(12) < 0.5f, hostBypassed || value(13) >= 0.5f};
+            value(9) < 0.5f, value(10) < 0.5f, value(11) < 0.5f, value(12) < 0.5f, hostBypassed || value(13) >= 0.5f, static_cast<sausage::Algorithm>(static_cast<int>(value(14)))};
 }
 void SausageProcessor::prepareToPlay(double sampleRate, int) { rack.setSettings(settings()); rack.prepare(sampleRate); }
 void SausageProcessor::releaseResources() { rack.reset(); }
@@ -55,7 +58,15 @@ void SausageProcessor::getStateInformation(juce::MemoryBlock& destination) {
 }
 void SausageProcessor::setStateInformation(const void* data, int bytes) {
     if (const auto xml = getXmlFromBinary(data, bytes))
-        if (xml->hasTagName(parameters.state.getType())) parameters.replaceState(juce::ValueTree::fromXml(*xml));
+        if (xml->hasTagName(parameters.state.getType())) {
+            auto state = juce::ValueTree::fromXml(*xml);
+            if (!state.getChildWithProperty("id", "algorithm").isValid()) {
+                auto algorithm = parameters.copyState().getChildWithProperty("id", "algorithm").createCopy();
+                algorithm.setProperty("value", 0.0f, nullptr);
+                state.appendChild(algorithm, nullptr);
+            }
+            parameters.replaceState(state);
+        }
 }
 void SausageProcessor::applyRecipe(int index) {
     constexpr float recipes[][9] {
@@ -66,7 +77,7 @@ void SausageProcessor::applyRecipe(int index) {
         {38, 60, 35, 82, 85, 65, 75, 80, -8}
     };
     if (index < 0 || index >= 5) return;
-    for (std::size_t i = 0; i < values.size(); ++i) {
+    for (std::size_t i = 0; i < 14; ++i) {
         auto* parameter = parameters.getParameter(ids[i]);
         parameter->beginChangeGesture();
         parameter->setValueNotifyingHost(parameter->convertTo0to1(i < 9 ? recipes[index][i] : 0.0f));

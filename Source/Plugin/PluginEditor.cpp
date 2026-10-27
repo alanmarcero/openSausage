@@ -50,7 +50,7 @@ ModulePanel::ModulePanel(juce::AudioProcessorValueTreeState& state, const juce::
                          const juce::String& secondaryName, const juce::String& bypassId, juce::Colour color, const juce::String& description)
     : title(name), subtitle(sub), primaryLabel(primaryName), secondaryLabel(secondaryName), hint(description), accent(color),
       amount(state.getRawParameterValue(primaryId)), detail(state.getRawParameterValue(secondaryId)),
-      moduleBypass(state.getRawParameterValue(bypassId)), masterBypass(state.getRawParameterValue("bypass")),
+      moduleBypass(state.getRawParameterValue(bypassId)), masterBypass(state.getRawParameterValue("bypass")), algorithm(state.getRawParameterValue("algorithm")),
       primaryAttachment(state, primaryId, primary), secondaryAttachment(state, secondaryId, secondary), bypassAttachment(state, bypassId, bypass) {
     kind = primaryId == "space" ? 1 : primaryId == "rise" ? 2 : primaryId == "width" ? 3 : 0;
     dial(primary, primaryId, color); dial(secondary, secondaryId, color);
@@ -72,7 +72,14 @@ void ModulePanel::paint(juce::Graphics& g) {
     g.setColour(cream.withAlpha(0.06f)); g.drawHorizontalLine(2, 10.0f, bounds.getRight() - 10.0f);
     g.setColour(accent); g.fillRoundedRectangle(16.0f, 16.0f, 4.0f, 34.0f, 2.0f);
     text(g, title, {28, 16, 120, 36}, 29.0f, ink, juce::Font::bold);
-    text(g, subtitle, {20, 57, 226, 22}, 12.0f, juce::Colour(0xffa3afaf));
+    constexpr const char* descriptions[4][4] {
+        {"SATURATION + COMPRESSION", "STEREO REVERB", "PITCH + BUILDUP", "STEREO WIDENER"},
+        {"ATAN / ANTIALIASED", "HOUSEHOLDER HALL", "FOUR-GRAIN RISE", "ALLPASS WIDTH"},
+        {"CLIP / ANTIALIASED", "TIGHT ROOM", "SHORT-GRAIN RISE", "BASS-FOCUSED WIDTH"},
+        {"SINE FOLD / ANTIALIASED", "HADAMARD HALL", "CROSS-FEEDBACK RISE", "MODULATED WIDTH"}
+    };
+    const auto mode = juce::jlimit(0, 3, static_cast<int>(algorithm->load()));
+    text(g, mode == 0 ? subtitle : descriptions[mode][kind], {20, 57, 226, 22}, 12.0f, juce::Colour(0xffa3afaf));
     g.setColour(juce::Colour(0xff3b4649)); g.drawHorizontalLine(88, 20.0f, 246.0f);
     text(g, primaryLabel.toUpperCase(), {20, 101, 226, 20}, 12.0f, ink, juce::Font::bold, juce::Justification::centred);
     text(g, secondaryLabel.toUpperCase(), {132, 323, 114, 24}, 12.0f, ink, juce::Font::bold);
@@ -139,7 +146,11 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
         const auto selected = recipes.getSelectedId();
         if (selected > 0) { ownerProcessor.applyRecipe(selected - 1); recipes.setSelectedId(0, juce::dontSendNotification); }
     };
-    addAndMakeVisible(output); addAndMakeVisible(bypass); addAndMakeVisible(recipes);
+    algorithms.setComponentID("algorithm"); algorithms.setName("Global algorithm");
+    for (int i = 0; i < 4; ++i) algorithms.addItem(sausage::algorithmNames[i], i + 1);
+    algorithms.setTooltip("One matched algorithm set for all four effects. Classic: original. Velvet: soft and spacious. Punch: tight and aggressive. Prism: bright and animated. Keeps your knob settings.");
+    algorithmAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(owner.parameters, "algorithm", algorithms);
+    addAndMakeVisible(output); addAndMakeVisible(bypass); addAndMakeVisible(recipes); addAndMakeVisible(algorithms);
     setResizable(true, true);
     setResizeLimits(870, 540, 1740, 1080);
     getConstrainer()->setFixedAspectRatio(1160.0 / 720.0);
@@ -166,8 +177,10 @@ void SausageEditor::paint(juce::Graphics& g) {
     g.setOpacity(1.0f);
     g.drawImage(faces[static_cast<std::size_t>(frame)], juce::Rectangle<float>(99.0f - bodyWidth * 0.5f, 9.0f + bounce, bodyWidth, 145.0f + fat * 4.0f), juce::RectanglePlacement::stretchToFit);
     text(g, "openSausage", {186, 23, 650, 66}, 60.0f, ink, juce::Font::bold);
-    text(g, "Saturation / Space / Pitch / Stereo", {190, 94, 650, 25}, 14.0f, ink, juce::Font::bold);
-    text(g, "Saturate. Make space. Lift it up. Spread it out.", {190, 121, 650, 20}, 13.0f, juce::Colour(0xffa9b6b7));
+    text(g, "Saturation / Space / Pitch / Stereo", {190, 94, 520, 25}, 14.0f, ink, juce::Font::bold);
+    text(g, "Saturate. Make space. Lift it up. Spread it out.", {190, 121, 520, 20}, 13.0f, juce::Colour(0xffa9b6b7));
+    text(g, "GLOBAL ALGORITHM", {734, 81, 180, 20}, 11.0f, ink, juce::Font::bold);
+    text(g, "RECIPE", {930, 81, 196, 20}, 11.0f, ink, juce::Font::bold);
     text(g, "ALAN MARCERO", {930, 31, 196, 24}, 15.0f, ink, juce::Font::bold, juce::Justification::centredRight);
     text(g, "AUDIO TOOLS / No. 04", {930, 57, 196, 20}, 11.0f, juce::Colour(0xffa9b6b7), juce::Font::plain, juce::Justification::centredRight);
     g.setColour(juce::Colour(0xf00c1418)); g.fillRect(0, 609, 1160, 111);
@@ -179,7 +192,7 @@ void SausageEditor::paint(juce::Graphics& g) {
     text(g, juce::String(ownerProcessor.gainReduction.load(std::memory_order_relaxed), 1) + " dB", {687, 646, 174, 28}, 22.0f, juce::Colour(0xffe9c65d), juce::Font::bold);
     g.setColour(juce::Colour(0xff3b474a)); g.drawHorizontalLine(687, 24, 1136);
     text(g, "SIGNAL FLOW   SAUSAGE  >  SPACE  >  RISE  >  WIDTH  >  OUTPUT", {30, 693, 760, 20}, 10.0f, juce::Colour(0xffa0adb0));
-    text(g, "4x SATURATION  /  v1.1.0", {880, 693, 246, 20}, 10.0f, juce::Colour(0xffa0adb0), juce::Font::plain, juce::Justification::centredRight);
+    text(g, "4x SATURATION  /  v1.2.0", {880, 693, 246, 20}, 10.0f, juce::Colour(0xffa0adb0), juce::Font::plain, juce::Justification::centredRight);
     for (const auto point : {juce::Point<float>(10, 10), juce::Point<float>(1150, 10), juce::Point<float>(10, 600), juce::Point<float>(1150, 600)}) {
         g.setColour(ink.withAlpha(0.45f)); g.fillEllipse(point.x - 3, point.y - 3, 6, 6);
         g.setColour(juce::Colour(0xffd8b15a)); g.drawLine(point.x - 2, point.y, point.x + 2, point.y, 1);
@@ -189,7 +202,8 @@ void SausageEditor::resized() {
     sausagePanel.setBounds(24, 172, 266, 415); spacePanel.setBounds(306, 172, 266, 415);
     risePanel.setBounds(588, 172, 266, 415); widthPanel.setBounds(870, 172, 266, 415);
     output.setBounds(548, 611, 108, 74); bypass.setBounds(934, 633, 192, 36); recipes.setBounds(930, 104, 196, 34);
+    algorithms.setBounds(734, 104, 180, 34);
     const auto transform = juce::AffineTransform::scale(static_cast<float>(getWidth()) / 1160.0f);
-    for (juce::Component* child : std::initializer_list<juce::Component*> {&sausagePanel, &spacePanel, &risePanel, &widthPanel, &output, &bypass, &recipes})
+    for (juce::Component* child : std::initializer_list<juce::Component*> {&sausagePanel, &spacePanel, &risePanel, &widthPanel, &output, &bypass, &recipes, &algorithms})
         child->setTransform(transform);
 }
