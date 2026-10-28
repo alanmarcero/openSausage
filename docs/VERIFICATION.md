@@ -22,7 +22,7 @@ The tag workflow builds and validates the macOS universal and Windows x64 packag
 
 # Verification — 2026-10-20
 
-Verified implementation: `b3f85bfa39deef2ff4534ecef0d98a225deaa2b9`.
+Verified implementation: `979b26c019ca0fb3763763ad2c4e510826c6290f`.
 
 [Successful GitHub Actions run](https://github.com/alanmarcero/openSausage/actions/runs/39489252218)
 
