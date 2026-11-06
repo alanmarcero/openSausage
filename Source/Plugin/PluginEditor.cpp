@@ -125,10 +125,10 @@ void ModulePanel::resized() {
 SausageEditor::SausageEditor(SausageProcessor& owner)
     : AudioProcessorEditor(owner), ownerProcessor(owner),
       enamel(juce::ImageCache::getFromMemory(BinaryData::analogcyberfaceplate_png, BinaryData::analogcyberfaceplate_pngSize)),
-      sausagePanel(owner.parameters, "Sausage", "SATURATION + COMPRESSION", "fatness", "Fatness", "color", "Color", "sausageBypass", juce::Colour(0xffdaab7b), "Warm weight to full-on crunch."),
-      spacePanel(owner.parameters, "Space", "STEREO REVERB", "space", "Mix", "size", "Size", "spaceBypass", juce::Colour(0xff87c8b8), "Small rooms. Big atmospheres."),
-      risePanel(owner.parameters, "Rise", "PITCH + BUILDUP", "rise", "Rise", "riseMix", "Mix", "riseBypass", juce::Colour(0xffb1a4cf), "Lift the pitch. Build the tension."),
-      widthPanel(owner.parameters, "Width", "STEREO WIDENER", "width", "Width", "spread", "Spread", "widthBypass", juce::Colour(0xff89becf), "Give your sound some elbow room."),
+      sausagePanel(owner.parameters, "Sausage", "SATURATION + COMPRESSION", "fatness", "Fatness", "color", "Color", "sausageBypass", juce::Colour(0xffdaab7b), "4x saturation and compression."),
+      spacePanel(owner.parameters, "Space", "STEREO REVERB", "space", "Mix", "size", "Size", "spaceBypass", juce::Colour(0xff87c8b8), "Reverb mix. Size sets decay."),
+      risePanel(owner.parameters, "Rise", "PITCH + BUILDUP", "rise", "Rise", "riseMix", "Mix", "riseBypass", juce::Colour(0xffb1a4cf), "Pitch shift, up to an octave."),
+      widthPanel(owner.parameters, "Width", "STEREO WIDENER", "width", "Width", "spread", "Spread", "widthBypass", juce::Colour(0xff89becf), "Stereo width and spacing."),
       outputAttachment(owner.parameters, "output", output), bypassAttachment(owner.parameters, "bypass", bypass) {
     setLookAndFeel(&look);
     const auto sheet = juce::ImageCache::getFromMemory(BinaryData::sausageexpressions_png, BinaryData::sausageexpressions_pngSize);
@@ -148,7 +148,7 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     };
     algorithms.setComponentID("algorithm"); algorithms.setName("Global algorithm");
     for (int i = 0; i < 4; ++i) algorithms.addItem(sausage::algorithmNames[i], i + 1);
-    algorithms.setTooltip("One matched algorithm set for all four effects. Classic: original. Velvet: soft and spacious. Punch: tight and aggressive. Prism: bright and animated. Keeps your knob settings.");
+    algorithms.setTooltip("One algorithm set for all four effects. Classic is the original set. Velvet uses atan and a hall. Punch uses clipping and a short room. Prism uses wavefolding and a brighter hall. Knob settings stay put.");
     algorithmAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(owner.parameters, "algorithm", algorithms);
     addAndMakeVisible(output); addAndMakeVisible(bypass); addAndMakeVisible(recipes); addAndMakeVisible(algorithms);
     setResizable(true, true);
@@ -178,11 +178,9 @@ void SausageEditor::paint(juce::Graphics& g) {
     g.drawImage(faces[static_cast<std::size_t>(frame)], juce::Rectangle<float>(99.0f - bodyWidth * 0.5f, 9.0f + bounce, bodyWidth, 145.0f + fat * 4.0f), juce::RectanglePlacement::stretchToFit);
     text(g, "openSausage", {186, 23, 650, 66}, 60.0f, ink, juce::Font::bold);
     text(g, "Saturation / Space / Pitch / Stereo", {190, 94, 520, 25}, 14.0f, ink, juce::Font::bold);
-    text(g, "Saturate. Make space. Lift it up. Spread it out.", {190, 121, 520, 20}, 13.0f, juce::Colour(0xffa9b6b7));
     text(g, "GLOBAL ALGORITHM", {734, 81, 180, 20}, 11.0f, ink, juce::Font::bold);
     text(g, "RECIPE", {930, 81, 196, 20}, 11.0f, ink, juce::Font::bold);
     text(g, "ALAN MARCERO", {930, 31, 196, 24}, 15.0f, ink, juce::Font::bold, juce::Justification::centredRight);
-    text(g, "AUDIO TOOLS / No. 04", {930, 57, 196, 20}, 11.0f, juce::Colour(0xffa9b6b7), juce::Font::plain, juce::Justification::centredRight);
     g.setColour(juce::Colour(0xf00c1418)); g.fillRect(0, 609, 1160, 111);
     g.setColour(juce::Colour(0xffdaab7b).withAlpha(0.4f)); g.drawHorizontalLine(609, 24, 1136);
     meter(g, "INPUT", ownerProcessor.inputPeak.load(std::memory_order_relaxed), 30);
