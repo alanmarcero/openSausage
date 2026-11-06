@@ -5,13 +5,13 @@
 [![build](https://github.com/alanmarcero/openSausage/actions/workflows/build.yml/badge.svg)](https://github.com/alanmarcero/openSausage/actions/workflows/build.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-**Saturation, reverb, rising pitch, and stereo width. Four effects in one native plugin.**
+Saturation, reverb, rising pitch, and stereo width.
 
 ![openSausage native editor](assets/native-ui.png)
 
 *Captured from the compiled v1.2.0 native editor with Prism selected. [Capture details and provenance](docs/SCREENSHOTS.md).*
 
-openSausage combines the two-knob saturation workflow of **Sausage Fattener** with original implementations of the three effect types in **Secret Sauce**: Space In-Your-Face, Eternal Return, and Wide Awake Rainbow. Turn up the heat, add a room, lift the pitch, and stretch the stereo field without opening four plugin windows.
+openSausage uses the two-knob saturation workflow of **Sausage Fattener** and original implementations of the three effect types in **Secret Sauce**: Space In-Your-Face, Eternal Return, and Wide Awake Rainbow.
 
 Built by Alan Marcero with C++20 and JUCE 8, following [openGlitchFX](https://github.com/alanmarcero/openGlitchFX) and [Analog Master](https://github.com/alanmarcero/analog-master-vst).
 
@@ -43,7 +43,7 @@ The selector is automatable and saved with your session. Switching crossfades ov
 
 The new saturation curves combine first-order antiderivative antialiasing with the existing 4× oversampling. These are original implementations of published techniques, with tuning chosen for each mode. See [algorithm sources and implementation notes](docs/ALGORITHMS.md) for equations, references, and tradeoffs.
 
-## A sausage with an attitude
+## Graphics
 
 Fatness changes the mascot from a cheeky grin to a furious expression, fattens its body, and adds movement. The four sections also have reactive graphics: a saturating waveform, expanding reverb rings, rising arrows, and a widening stereo display. These read the same parameters as the DSP, so presets and host automation animate them too. Bypassed sections return to their resting graphics.
 
