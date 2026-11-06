@@ -144,13 +144,35 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     recipes.addItemList({"01 / Clean slate", "02 / Gentle heat", "03 / Wide drums", "04 / In orbit", "05 / Lift off"}, 1);
     recipes.onChange = [this] {
         const auto selected = recipes.getSelectedId();
-        if (selected > 0) { ownerProcessor.applyRecipe(selected - 1); recipes.setSelectedId(0, juce::dontSendNotification); }
+        if (selected > 0) {
+            currentRecipe = selected - 1;
+            ownerProcessor.applyRecipe(currentRecipe);
+        }
+    };
+    prevRecipe.setComponentID("prevRecipe");
+    prevRecipe.setTooltip("Previous recipe");
+    prevRecipe.onClick = [this] {
+        const int num = recipes.getNumItems();
+        if (num <= 0) return;
+        currentRecipe = (currentRecipe <= 0 ? num : currentRecipe) - 1;
+        ownerProcessor.applyRecipe(currentRecipe);
+        recipes.setSelectedId(currentRecipe + 1, juce::dontSendNotification);
+    };
+    nextRecipe.setComponentID("nextRecipe");
+    nextRecipe.setTooltip("Next recipe");
+    nextRecipe.onClick = [this] {
+        const int num = recipes.getNumItems();
+        if (num <= 0) return;
+        currentRecipe = (currentRecipe + 1) % num;
+        ownerProcessor.applyRecipe(currentRecipe);
+        recipes.setSelectedId(currentRecipe + 1, juce::dontSendNotification);
     };
     algorithms.setComponentID("algorithm"); algorithms.setName("Global algorithm");
     for (int i = 0; i < 4; ++i) algorithms.addItem(sausage::algorithmNames[i], i + 1);
     algorithms.setTooltip("One algorithm set for all four effects. Classic is the original set. Velvet uses atan and a hall. Punch uses clipping and a short room. Prism uses wavefolding and a brighter hall. Knob settings stay put.");
     algorithmAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(owner.parameters, "algorithm", algorithms);
     addAndMakeVisible(output); addAndMakeVisible(bypass); addAndMakeVisible(recipes); addAndMakeVisible(algorithms);
+    addAndMakeVisible(prevRecipe); addAndMakeVisible(nextRecipe);
     setResizable(true, true);
     setResizeLimits(870, 540, 1740, 1080);
     getConstrainer()->setFixedAspectRatio(1160.0 / 720.0);
@@ -190,7 +212,7 @@ void SausageEditor::paint(juce::Graphics& g) {
     text(g, juce::String(ownerProcessor.gainReduction.load(std::memory_order_relaxed), 1) + " dB", {687, 646, 174, 28}, 22.0f, juce::Colour(0xffe9c65d), juce::Font::bold);
     g.setColour(juce::Colour(0xff3b474a)); g.drawHorizontalLine(687, 24, 1136);
     text(g, "SIGNAL FLOW   SAUSAGE  >  SPACE  >  RISE  >  WIDTH  >  OUTPUT", {30, 693, 760, 20}, 10.0f, juce::Colour(0xffa0adb0));
-    text(g, "4x SATURATION  /  v1.2.1", {880, 693, 246, 20}, 10.0f, juce::Colour(0xffa0adb0), juce::Font::plain, juce::Justification::centredRight);
+    text(g, "4x SATURATION  /  v1.2.2", {880, 693, 246, 20}, 10.0f, juce::Colour(0xffa0adb0), juce::Font::plain, juce::Justification::centredRight);
     for (const auto point : {juce::Point<float>(10, 10), juce::Point<float>(1150, 10), juce::Point<float>(10, 600), juce::Point<float>(1150, 600)}) {
         g.setColour(ink.withAlpha(0.45f)); g.fillEllipse(point.x - 3, point.y - 3, 6, 6);
         g.setColour(juce::Colour(0xffd8b15a)); g.drawLine(point.x - 2, point.y, point.x + 2, point.y, 1);
@@ -199,9 +221,12 @@ void SausageEditor::paint(juce::Graphics& g) {
 void SausageEditor::resized() {
     sausagePanel.setBounds(24, 172, 266, 415); spacePanel.setBounds(306, 172, 266, 415);
     risePanel.setBounds(588, 172, 266, 415); widthPanel.setBounds(870, 172, 266, 415);
-    output.setBounds(548, 611, 108, 74); bypass.setBounds(934, 633, 192, 36); recipes.setBounds(930, 104, 196, 34);
+    output.setBounds(548, 611, 108, 74); bypass.setBounds(934, 633, 192, 36);
+    prevRecipe.setBounds(930, 104, 26, 34);
+    recipes.setBounds(960, 104, 136, 34);
+    nextRecipe.setBounds(1100, 104, 26, 34);
     algorithms.setBounds(734, 104, 180, 34);
     const auto transform = juce::AffineTransform::scale(static_cast<float>(getWidth()) / 1160.0f);
-    for (juce::Component* child : std::initializer_list<juce::Component*> {&sausagePanel, &spacePanel, &risePanel, &widthPanel, &output, &bypass, &recipes, &algorithms})
-        child->setTransform(transform);
+    std::ranges::for_each(std::initializer_list<juce::Component*> {&sausagePanel, &spacePanel, &risePanel, &widthPanel, &output, &bypass, &recipes, &algorithms, &prevRecipe, &nextRecipe},
+                          [transform](juce::Component* child) { child->setTransform(transform); });
 }
