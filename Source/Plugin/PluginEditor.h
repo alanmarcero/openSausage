@@ -43,6 +43,8 @@ private:
     juce::Slider output;
     juce::TextButton bypass;
     juce::ComboBox recipes, algorithms;
+    juce::TextButton prevRecipe{"<"}, nextRecipe{">"};
+    int currentRecipe = -1;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> algorithmAttachment;
     juce::AudioProcessorValueTreeState::SliderAttachment outputAttachment;
     juce::AudioProcessorValueTreeState::ButtonAttachment bypassAttachment;
