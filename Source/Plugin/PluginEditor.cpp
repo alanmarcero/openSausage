@@ -141,7 +141,10 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     bypass.setComponentID("bypass"); bypass.setName("Master bypass"); bypass.setClickingTogglesState(true);
     bypass.setTooltip("Bypass the complete chain, preserving the reported 16-sample latency.");
     recipes.setComponentID("recipes"); recipes.setTextWhenNothingSelected("CHOOSE A RECIPE");
-    recipes.addItemList({"01 / Clean slate", "02 / Gentle heat", "03 / Wide drums", "04 / In orbit", "05 / Lift off"}, 1);
+    recipes.addItemList({"01 / Clean slate", "02 / Gentle heat", "03 / Wide drums", "04 / In orbit", "05 / Lift off",
+                         "06 / Big room lead", "07 / Tech house bass", "08 / Dubstep wobble heat", "09 / Trance super-saw",
+                         "10 / Drum & bass break", "11 / Future rave punch", "12 / Deep house warmth", "13 / Hardstyle raw distortion",
+                         "14 / Electro dirty synth", "15 / Festival drop slam", "16 / Vocal build riser", "17 / Sub crusher"}, 1);
     recipes.onChange = [this] {
         const auto selected = recipes.getSelectedId();
         if (selected > 0) {
@@ -212,7 +215,7 @@ void SausageEditor::paint(juce::Graphics& g) {
     text(g, juce::String(ownerProcessor.gainReduction.load(std::memory_order_relaxed), 1) + " dB", {687, 646, 174, 28}, 22.0f, juce::Colour(0xffe9c65d), juce::Font::bold);
     g.setColour(juce::Colour(0xff3b474a)); g.drawHorizontalLine(687, 24, 1136);
     text(g, "SIGNAL FLOW   SAUSAGE  >  SPACE  >  RISE  >  WIDTH  >  OUTPUT", {30, 693, 760, 20}, 10.0f, juce::Colour(0xffa0adb0));
-    text(g, "4x SATURATION  /  v1.2.2", {880, 693, 246, 20}, 10.0f, juce::Colour(0xffa0adb0), juce::Font::plain, juce::Justification::centredRight);
+    text(g, "4x SATURATION  /  v1.3.0", {880, 693, 246, 20}, 10.0f, juce::Colour(0xffa0adb0), juce::Font::plain, juce::Justification::centredRight);
     for (const auto point : {juce::Point<float>(10, 10), juce::Point<float>(1150, 10), juce::Point<float>(10, 600), juce::Point<float>(1150, 600)}) {
         g.setColour(ink.withAlpha(0.45f)); g.fillEllipse(point.x - 3, point.y - 3, 6, 6);
         g.setColour(juce::Colour(0xffd8b15a)); g.drawLine(point.x - 2, point.y, point.x + 2, point.y, 1);
