@@ -16,12 +16,26 @@ void RackEngine::Delay::resize(std::size_t size) { data.assign(size, 0.0f); posi
 void RackEngine::Delay::clear() noexcept { std::fill(data.begin(), data.end(), 0.0f); position = 0; }
 float RackEngine::Delay::read(float delay) const noexcept {
     if (data.empty()) return 0.0f;
-    const auto index = static_cast<double>(position) - static_cast<double>(std::clamp(delay, 1.0f, static_cast<float>(data.size() - 1)));
-    const auto base = std::floor(index);
-    // Wrap the integer index: adding the buffer length to a tiny negative float can round past its end.
-    const auto lower = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(base) + static_cast<std::ptrdiff_t>(data.size())) % data.size();
-    const auto fraction = static_cast<float>(index - base);
-    return data[lower] + fraction * (data[(lower + 1) % data.size()] - data[lower]);
+    const auto sz = static_cast<std::ptrdiff_t>(data.size());
+    const auto index = static_cast<double>(position) - static_cast<double>(std::clamp(delay, 1.0f, static_cast<float>(sz - 1)));
+    const auto base = static_cast<std::ptrdiff_t>(std::floor(index));
+    const auto fraction = static_cast<float>(index - std::floor(index));
+
+    auto at = [this, sz](std::ptrdiff_t idx) noexcept -> float {
+        return data[static_cast<std::size_t>((idx % sz + sz) % sz)];
+    };
+
+    const float ym1 = at(base - 1);
+    const float y0  = at(base);
+    const float y1  = at(base + 1);
+    const float y2  = at(base + 2);
+
+    const float c0 = y0;
+    const float c1 = 0.5f * (y1 - ym1);
+    const float c2 = ym1 - 2.5f * y0 + 2.0f * y1 - 0.5f * y2;
+    const float c3 = 0.5f * (y2 - ym1) + 1.5f * (y0 - y1);
+
+    return ((c3 * fraction + c2) * fraction + c1) * fraction + c0;
 }
 void RackEngine::Delay::write(float sample) noexcept {
     if (data.empty()) return;

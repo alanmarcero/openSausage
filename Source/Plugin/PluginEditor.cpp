@@ -79,7 +79,15 @@ void ModulePanel::paint(juce::Graphics& g) {
         {"SINE FOLD / ANTIALIASED", "HADAMARD HALL", "CROSS-FEEDBACK RISE", "MODULATED WIDTH"}
     };
     const auto mode = juce::jlimit(0, 3, static_cast<int>(algorithm->load()));
-    text(g, mode == 0 ? subtitle : descriptions[mode][kind], {20, 57, 226, 22}, 12.0f, juce::Colour(0xffa3afaf));
+    text(g, mode == 0 ? subtitle : descriptions[mode][kind], {20, 57, 210, 22}, 12.0f, juce::Colour(0xffa3afaf));
+    const bool isModuleActive = (moduleBypass->load() <= 0.5f) && (masterBypass->load() <= 0.5f) && (amount->load() > 0.0f);
+    const auto ledColor = isModuleActive ? accent : juce::Colour(0xff3b4649);
+    g.setColour(ledColor);
+    g.fillEllipse(240.0f, 64.0f, 6.0f, 6.0f);
+    if (isModuleActive) {
+        g.setColour(accent.withAlpha(0.4f));
+        g.drawEllipse(238.0f, 62.0f, 10.0f, 10.0f, 1.2f);
+    }
     g.setColour(juce::Colour(0xff3b4649)); g.drawHorizontalLine(88, 20.0f, 246.0f);
     text(g, primaryLabel.toUpperCase(), {20, 101, 226, 20}, 12.0f, ink, juce::Font::bold, juce::Justification::centred);
     text(g, secondaryLabel.toUpperCase(), {132, 323, 114, 24}, 12.0f, ink, juce::Font::bold);
@@ -134,7 +142,7 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     const auto sheet = juce::ImageCache::getFromMemory(BinaryData::sausageexpressions_png, BinaryData::sausageexpressions_pngSize);
     for (int frame = 0; frame < 3; ++frame)
         faces[static_cast<std::size_t>(frame)] = trimAlpha(sheet.getClippedImage({frame * sheet.getWidth() / 3, 0, sheet.getWidth() / 3, sheet.getHeight()}));
-    for (auto* panel : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) addAndMakeVisible(panel);
+    for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) addAndMakeVisible(p);
     dial(output, "output", juce::Colour(0xffeac35d));
     output.setTextValueSuffix(" dB"); output.setTooltip("Final output trim, after all four effects. Master bypass ignores trim.");
     output.setColour(juce::Slider::textBoxTextColourId, cream);
@@ -185,7 +193,7 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
 SausageEditor::~SausageEditor() { stopTimer(); setLookAndFeel(nullptr); }
 void SausageEditor::timerCallback() {
     animationPhase += 0.13f;
-    for (auto* panel : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) panel->advanceAnimation();
+    for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) p->advanceAnimation();
     repaint();
 }
 void SausageEditor::paint(juce::Graphics& g) {

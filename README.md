@@ -9,7 +9,7 @@ Saturation, reverb, rising pitch, and stereo width.
 
 ![openSausage native editor](assets/native-ui.png)
 
-*Captured from the compiled v1.2.0 native editor with Prism selected. [Capture details and provenance](docs/SCREENSHOTS.md).*
+*Captured from the compiled v1.3.0 native editor with Prism selected. [Capture details and provenance](docs/SCREENSHOTS.md).*
 
 openSausage uses the two-knob saturation workflow of **Sausage Fattener** and original implementations of the three effect types in **Secret Sauce**: Space In-Your-Face, Eternal Return, and Wide Awake Rainbow.
 
