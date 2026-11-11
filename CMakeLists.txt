@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(openSausage VERSION 1.5.0 LANGUAGES C CXX)
+project(openSausage VERSION 1.5.1 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(MSVC)
@@ -22,6 +22,7 @@ if(OS_BUILD_PLUGIN)
         list(APPEND OS_FORMATS AU)
     endif()
     juce_add_plugin(openSausage
+        VERSION "${PROJECT_VERSION}"
         COMPANY_NAME "Alan Marcero"
         COMPANY_WEBSITE "https://github.com/alanmarcero/openSausage"
         MICROPHONE_PERMISSION_ENABLED TRUE
