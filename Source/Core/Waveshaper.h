@@ -8,18 +8,27 @@ namespace sausage {
 class Waveshaper {
 public:
     float process(float input, Algorithm algorithm) noexcept {
-        if (algorithm == Algorithm::Classic) return std::tanh(input);
         const auto x = static_cast<double>(input);
         double integral = 0.0;
         switch (algorithm) {
+            case Algorithm::Classic: {
+                const auto absX = std::abs(x);
+                if (absX < 20.0) {
+                    integral = absX + std::log1p(std::exp(-2.0 * absX)) - std::numbers::ln2;
+                } else {
+                    integral = absX - std::numbers::ln2;
+                }
+                break;
+            }
             case Algorithm::Velvet:
                 integral = (x * std::atan(x) - 0.5 * std::log1p(x * x)) * 2.0 / std::numbers::pi;
                 break;
             case Algorithm::Punch:
                 integral = std::abs(x) <= 1.0 ? 0.5 * x * x : std::abs(x) - 0.5;
                 break;
-            case Algorithm::Prism: integral = 1.0 - std::cos(x); break;
-            case Algorithm::Classic: return std::tanh(input);
+            case Algorithm::Prism:
+                integral = 1.0 - std::cos(x);
+                break;
         }
         const auto delta = x - previous;
         double output = 0.0;
@@ -28,10 +37,10 @@ public:
         } else {
             const auto midpoint = (x + previous) * 0.5;
             switch (algorithm) {
+                case Algorithm::Classic: output = std::tanh(midpoint); break;
                 case Algorithm::Velvet: output = std::atan(midpoint) * 2.0 / std::numbers::pi; break;
                 case Algorithm::Punch: output = std::clamp(midpoint, -1.0, 1.0); break;
                 case Algorithm::Prism: output = std::sin(midpoint); break;
-                case Algorithm::Classic: output = std::tanh(midpoint); break;
             }
         }
         previous = x;
