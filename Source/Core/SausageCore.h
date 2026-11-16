@@ -5,12 +5,17 @@
 #include <cstddef>
 
 namespace sausage {
+enum class SaturationFocus { Neutral, KeepLow, KeepHigh };
+
 struct Settings {
     float fatness = 0.0f;
     float color = 0.0f;
     float outputDb = 0.0f;
     bool bypass = false;
     Algorithm algorithm = Algorithm::Classic;
+    float saturationMix = 1.0f;
+    float dynamics = 1.0f;
+    SaturationFocus focus = SaturationFocus::Neutral;
 };
 
 class Core {
@@ -29,7 +34,7 @@ private:
     };
     struct Channel {
         Fir up, down;
-        Waveshaper shaper;
+        std::array<Waveshaper, 3> shapers;
         std::array<float, latency> dry {};
         float low = 0.0f, dcInput = 0.0f, dcOutput = 0.0f;
     };
@@ -39,6 +44,7 @@ private:
     double rate = 48000.0;
     float smoothing = 0.0f, attack = 0.0f, release = 0.0f;
     float tonePole = 0.0f, dcPole = 0.0f, envelope = 0.0f, reduction = 0.0f;
+    float focusPosition = 0.0f;
     float active = 1.0f;
     int dryPosition = 0;
 };

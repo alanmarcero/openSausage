@@ -20,10 +20,13 @@ private:
     std::atomic<float>* algorithm;
     int kind = 0;
     float phase = 0.0f;
-    juce::Slider primary, secondary;
+    juce::Slider primary, secondary, saturationMix, dynamics;
+    juce::ComboBox focus;
     juce::TextButton bypass;
     juce::AudioProcessorValueTreeState::SliderAttachment primaryAttachment, secondaryAttachment;
     juce::AudioProcessorValueTreeState::ButtonAttachment bypassAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> saturationMixAttachment, dynamicsAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> focusAttachment;
 };
 
 class SausageEditor final : public juce::AudioProcessorEditor, private juce::Timer {

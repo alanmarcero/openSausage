@@ -28,12 +28,17 @@ float Core::Fir::tick(float input, const std::array<float, 65>& taps) noexcept {
 void Core::setSettings(Settings settings) noexcept {
     target = {std::clamp(finite(settings.fatness), 0.0f, 1.0f),
               std::clamp(finite(settings.color), 0.0f, 1.0f),
-              std::clamp(finite(settings.outputDb), -24.0f, 12.0f), settings.bypass, validAlgorithm(settings.algorithm)};
+              std::clamp(finite(settings.outputDb), -24.0f, 12.0f), settings.bypass, validAlgorithm(settings.algorithm),
+              std::clamp(finite(settings.saturationMix, 1.0f), 0.0f, 1.0f),
+              std::clamp(finite(settings.dynamics, 1.0f), 0.0f, 1.0f),
+              settings.focus >= SaturationFocus::Neutral && settings.focus <= SaturationFocus::KeepHigh
+                  ? settings.focus : SaturationFocus::Neutral};
 }
 
 void Core::prepare(double sampleRate) noexcept {
     rate = std::isfinite(sampleRate) ? std::clamp(sampleRate, 8000.0, 384000.0) : 48000.0;
     smoothing = pole(0.01, rate);
+    focusPosition = static_cast<float>(target.focus);
     attack = pole(0.003, rate);
     release = pole(0.08, rate);
     tonePole = static_cast<float>(std::exp(-2.0 * std::numbers::pi * 1200.0 / (rate * 4.0)));
@@ -56,6 +61,7 @@ void Core::reset() noexcept {
     envelope = reduction = 0.0f;
     dryPosition = 0;
     current = target;
+    focusPosition = static_cast<float>(target.focus);
     active = target.bypass ? 0.0f : 1.0f;
 }
 
@@ -65,15 +71,23 @@ void Core::process(float* left, float* right, int samples) noexcept {
         current.fatness = follow(current.fatness, target.fatness, smoothing);
         current.color = follow(current.color, target.color, smoothing);
         current.outputDb = follow(current.outputDb, target.outputDb, smoothing);
+        current.saturationMix = follow(current.saturationMix, target.saturationMix, smoothing);
+        current.dynamics = follow(current.dynamics, target.dynamics, smoothing);
+        focusPosition = follow(focusPosition, static_cast<float>(target.focus), smoothing);
         active = follow(active, target.bypass ? 0.0f : 1.0f, smoothing);
         const float input[] {std::clamp(finite(left[i]), -32.0f, 32.0f), right ? std::clamp(finite(right[i]), -32.0f, 32.0f) : 0.0f};
         const auto peak = std::max(std::abs(input[0]), std::abs(input[1]));
         envelope = follow(envelope, peak, peak > envelope ? attack : release);
         const auto threshold = std::pow(10.0f, -14.0f * current.fatness / 20.0f);
-        const auto compression = envelope > threshold ? std::pow(threshold / envelope, 1.0f - 1.0f / (1.0f + 7.0f * current.fatness)) : 1.0f;
+        const auto requestedCompression = envelope > threshold ? std::pow(threshold / envelope, 1.0f - 1.0f / (1.0f + 7.0f * current.fatness)) : 1.0f;
+        const auto compression = 1.0f + current.dynamics * (requestedCompression - 1.0f);
         reduction = -20.0f * std::log10(std::max(compression, 1.0e-8f));
         const auto drive = 1.0f + 24.0f * current.fatness;
-        const auto blend = std::min(1.0f, current.fatness * 5.0f + current.color * 3.0f);
+        const auto legacyBlend = std::min(1.0f, current.fatness * 5.0f + current.color * 3.0f);
+        const auto blend = legacyBlend * current.saturationMix;
+        const auto neutralWeight = std::max(0.0f, 1.0f - focusPosition);
+        const auto keepLowWeight = focusPosition < 1.0f ? focusPosition : 2.0f - focusPosition;
+        const auto keepHighWeight = std::max(0.0f, focusPosition - 1.0f);
         const auto gain = std::pow(10.0f, current.outputDb / 20.0f);
         for (int ch = 0; ch < (right ? 2 : 1); ++ch) {
             auto& state = channels[static_cast<std::size_t>(ch)];
@@ -83,8 +97,12 @@ void Core::process(float* left, float* right, int samples) noexcept {
             for (int sub = 0; sub < 4; ++sub) {
                 const auto up = state.up.tick(sub == 0 ? input[ch] * 4.0f : 0.0f, coefficients);
                 state.low = up + tonePole * (state.low - up);
-                const auto colored = up + current.color * 2.5f * (up - state.low);
-                const auto shaped = state.shaper.process(colored * compression * drive, target.algorithm);
+                const auto high = up - state.low;
+                const auto colored = up + current.color * 2.5f * high;
+                const auto neutral = state.shapers[0].process(colored * compression * drive, target.algorithm);
+                const auto keepLow = state.low + state.shapers[1].process(high * (1.0f + current.color * 2.5f) * compression * drive, target.algorithm);
+                const auto keepHigh = high + state.shapers[2].process(state.low * compression * drive, target.algorithm);
+                const auto shaped = neutralWeight * neutral + keepLowWeight * keepLow + keepHighWeight * keepHigh;
                 const auto saturated = colored + current.fatness * (shaped - colored);
                 const auto dc = saturated - state.dcInput + dcPole * state.dcOutput;
                 state.dcInput = saturated;
