@@ -61,6 +61,26 @@ ModulePanel::ModulePanel(juce::AudioProcessorValueTreeState& state, const juce::
     bypass.setClickingTogglesState(true);
     bypass.setTooltip("Fully bypass " + name + ", including its wet signal and tails. Other modules keep running.");
     addAndMakeVisible(primary); addAndMakeVisible(secondary); addAndMakeVisible(bypass);
+    if (kind == 0) {
+        dial(saturationMix, "satMix", color);
+        dial(dynamics, "satDynamics", color);
+        for (auto* slider : {&saturationMix, &dynamics}) {
+            slider->setSliderStyle(juce::Slider::LinearHorizontal);
+            slider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 42, 20);
+            slider->setNumDecimalPlacesToDisplay(0);
+        }
+        saturationMix.setDoubleClickReturnValue(true, 100.0);
+        dynamics.setDoubleClickReturnValue(true, 100.0);
+        saturationMix.setTooltip("Blend the saturated signal with the clean signal. 0% is clean; 100% keeps the full existing Fatness/Color blend.");
+        dynamics.setTooltip("Amount of the Fatness envelope compression. 0% bypasses compression; 100% uses the full compressor response.");
+        focus.setComponentID("satFocus");
+        focus.addItemList({"Neutral", "Keep Low", "Keep High"}, 1);
+        focus.setTooltip("Neutral saturates the full signal. Keep Low leaves bass mostly clean and saturates highs; Keep High saturates bass and keeps highs cleaner.");
+        saturationMixAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, "satMix", saturationMix);
+        dynamicsAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, "satDynamics", dynamics);
+        focusAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(state, "satFocus", focus);
+        addAndMakeVisible(saturationMix); addAndMakeVisible(dynamics); addAndMakeVisible(focus);
+    }
 }
 void ModulePanel::paint(juce::Graphics& g) {
     g.setColour(juce::Colours::black.withAlpha(0.16f));
@@ -89,10 +109,21 @@ void ModulePanel::paint(juce::Graphics& g) {
         g.drawEllipse(238.0f, 62.0f, 10.0f, 10.0f, 1.2f);
     }
     g.setColour(juce::Colour(0xff3b4649)); g.drawHorizontalLine(88, 20.0f, 246.0f);
-    text(g, primaryLabel.toUpperCase(), {20, 101, 226, 20}, 12.0f, ink, juce::Font::bold, juce::Justification::centred);
-    text(g, secondaryLabel.toUpperCase(), {132, 323, 114, 24}, 12.0f, ink, juce::Font::bold);
-    g.setFont(juce::FontOptions(12.0f)); g.setColour(juce::Colour(0xffa3afaf));
-    g.drawFittedText(hint, {132, 350, 112, 30}, juce::Justification::topLeft, 2);
+    if (kind != 0)
+        text(g, primaryLabel.toUpperCase(), {20, 101, 226, 20}, 12.0f, ink, juce::Font::bold, juce::Justification::centred);
+    if (kind == 0) {
+        text(g, primaryLabel.toUpperCase(), {12, 105, 118, 18}, 11.0f, ink, juce::Font::bold, juce::Justification::centred);
+        text(g, "SATURATION MIX", {138, 105, 112, 18}, 10.0f, ink, juce::Font::bold, juce::Justification::centred);
+        text(g, "DYNAMICS", {138, 164, 112, 18}, 10.0f, ink, juce::Font::bold, juce::Justification::centred);
+        text(g, secondaryLabel.toUpperCase(), {12, 295, 112, 18}, 10.0f, ink, juce::Font::bold, juce::Justification::centred);
+        text(g, "SATURATION FOCUS", {138, 223, 112, 18}, 9.0f, ink, juce::Font::bold, juce::Justification::centred);
+        g.setFont(juce::FontOptions(10.0f)); g.setColour(juce::Colour(0xffa3afaf));
+        g.drawFittedText(hint, {138, 285, 112, 44}, juce::Justification::topLeft, 3);
+    } else {
+        text(g, secondaryLabel.toUpperCase(), {132, 323, 114, 24}, 12.0f, ink, juce::Font::bold);
+        g.setFont(juce::FontOptions(12.0f)); g.setColour(juce::Colour(0xffa3afaf));
+        g.drawFittedText(hint, {132, 350, 112, 30}, juce::Justification::topLeft, 2);
+    }
     const auto value = moduleBypass->load() > 0.5f || masterBypass->load() > 0.5f ? 0.0f : amount->load() / 100.0f;
     const auto secondaryValue = detail->load() / 100.0f;
     const auto motion = phase * value;
@@ -127,8 +158,16 @@ void ModulePanel::paint(juce::Graphics& g) {
 }
 void ModulePanel::resized() {
     bypass.setBounds(154, 20, 94, 30);
-    primary.setBounds(44, 126, 178, 178);
-    secondary.setBounds(20, 314, 100, 96);
+    if (kind == 0) {
+        primary.setBounds(4, 120, 132, 173);
+        secondary.setBounds(10, 314, 108, 94);
+        saturationMix.setBounds(138, 124, 112, 34);
+        dynamics.setBounds(138, 183, 112, 34);
+        focus.setBounds(138, 246, 112, 28);
+    } else {
+        primary.setBounds(44, 126, 178, 178);
+        secondary.setBounds(20, 314, 100, 96);
+    }
 }
 SausageEditor::SausageEditor(SausageProcessor& owner)
     : AudioProcessorEditor(owner), ownerProcessor(owner),

@@ -27,6 +27,29 @@ int main(int argc, char** argv) {
         processor.prepareToPlay(48000, 256);
         std::unique_ptr<juce::AudioProcessorEditor> editor(processor.createEditor());
         require(editor != nullptr, "Editor missing");
+        auto* saturationMix = dynamic_cast<juce::Slider*>(find(*editor, "satMix"));
+        auto* dynamics = dynamic_cast<juce::Slider*>(find(*editor, "satDynamics"));
+        auto* focus = dynamic_cast<juce::ComboBox*>(find(*editor, "satFocus"));
+        require(saturationMix && dynamics && focus, "New saturation controls missing from the native editor");
+        require(processor.parameters.getRawParameterValue("satMix")->load() == 100.0f
+                    && processor.parameters.getRawParameterValue("satDynamics")->load() == 100.0f
+                    && processor.parameters.getRawParameterValue("satFocus")->load() == 0.0f,
+                "New saturation controls have compatibility defaults");
+        saturationMix->setValue(42.0, juce::sendNotificationSync);
+        dynamics->setValue(37.0, juce::sendNotificationSync);
+        focus->setSelectedId(2, juce::sendNotificationSync);
+        require(processor.parameters.getRawParameterValue("satMix")->load() == 42.0f
+                    && processor.parameters.getRawParameterValue("satDynamics")->load() == 37.0f
+                    && processor.parameters.getRawParameterValue("satFocus")->load() == 1.0f,
+                "Saturation controls are attached to host parameters");
+        juce::MemoryBlock featureState;
+        processor.getStateInformation(featureState);
+        SausageProcessor featureRestored;
+        featureRestored.setStateInformation(featureState.getData(), static_cast<int>(featureState.getSize()));
+        require(featureRestored.parameters.getRawParameterValue("satMix")->load() == 42.0f
+                    && featureRestored.parameters.getRawParameterValue("satDynamics")->load() == 37.0f
+                    && featureRestored.parameters.getRawParameterValue("satFocus")->load() == 1.0f,
+                "Saturation controls survive session recall");
         save(*editor, output, "openSausage-clean.png");
         auto* algorithms = dynamic_cast<juce::ComboBox*>(find(*editor, "algorithm"));
         require(algorithms != nullptr && algorithms->getNumItems() == 4, "Four global algorithms missing");
@@ -38,6 +61,10 @@ int main(int argc, char** argv) {
             require(static_cast<int>(processor.parameters.getRawParameterValue("algorithm")->load()) == mode, "Algorithm selector not connected");
             processor.applyRecipe(3);
             require(algorithms->getSelectedId() == mode + 1, "Recipe overwrote global algorithm");
+            require(processor.parameters.getRawParameterValue("satMix")->load() == 100.0f
+                        && processor.parameters.getRawParameterValue("satDynamics")->load() == 100.0f
+                        && processor.parameters.getRawParameterValue("satFocus")->load() == 0.0f,
+                    "Recipe did not restore the new saturation defaults");
             juce::MemoryBlock saved;
             processor.getStateInformation(saved);
             SausageProcessor recalled;
@@ -71,11 +98,19 @@ int main(int argc, char** argv) {
             }
         auto legacy = processor.parameters.copyState();
         for (int i = legacy.getNumChildren(); --i >= 0;)
-            if (legacy.getChild(i).getProperty("id").toString() == "algorithm") legacy.removeChild(i, nullptr);
+            if (const auto id = legacy.getChild(i).getProperty("id").toString();
+                id == "algorithm" || id == "satMix" || id == "satDynamics" || id == "satFocus") legacy.removeChild(i, nullptr);
         juce::MemoryBlock legacyData;
         juce::AudioProcessor::copyXmlToBinary(*legacy.createXml(), legacyData);
+        saturationMix->setValue(12.0, juce::sendNotificationSync);
+        dynamics->setValue(24.0, juce::sendNotificationSync);
+        focus->setSelectedId(3, juce::sendNotificationSync);
         processor.setStateInformation(legacyData.getData(), static_cast<int>(legacyData.getSize()));
         require(processor.parameters.getRawParameterValue("algorithm")->load() == 0.0f, "Legacy session did not select Classic");
+        require(processor.parameters.getRawParameterValue("satMix")->load() == 100.0f
+                    && processor.parameters.getRawParameterValue("satDynamics")->load() == 100.0f
+                    && processor.parameters.getRawParameterValue("satFocus")->load() == 0.0f,
+                "Legacy session did not supply saturation defaults");
         require(algorithms->getSelectedId() == 1, "Legacy session did not update selector");
         algorithmParameter->setValueNotifyingHost(1.0f);
         require(algorithms->getSelectedId() == 4, "Host automation did not update selector");
@@ -142,7 +177,7 @@ int main(int argc, char** argv) {
             if (dynamic_cast<juce::ResizableCornerComponent*>(child))
                 require(std::abs(child->getBoundsInParent().getRight() - editor->getWidth()) <= 1,
                         "Resize handle moved outside the enlarged editor");
-        std::cout << "PASS: four global algorithms, recipe preservation, legacy/current session recall, host automation, native controls, five bypass attachments, audio processing, parameter-reactive mascot, resize, and screenshots.\n";
+        std::cout << "PASS: saturation focus/mix/dynamics controls, four algorithms, recipe defaults, legacy/current recall, host automation, bypass, audio processing, resizing, and screenshots.\n";
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
     return 0;
 }

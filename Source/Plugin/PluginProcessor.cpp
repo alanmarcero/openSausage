@@ -1,8 +1,10 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <array>
+#include <utility>
 
 namespace {
-constexpr const char* ids[] {"fatness", "color", "space", "size", "rise", "riseMix", "width", "spread", "output", "sausageBypass", "spaceBypass", "riseBypass", "widthBypass", "bypass", "algorithm"};
+constexpr const char* ids[] {"fatness", "color", "space", "size", "rise", "riseMix", "width", "spread", "output", "sausageBypass", "spaceBypass", "riseBypass", "widthBypass", "bypass", "algorithm", "satMix", "satDynamics", "satFocus"};
 juce::AudioProcessorValueTreeState::ParameterLayout layout() {
     juce::AudioProcessorValueTreeState::ParameterLayout result;
     const char* names[] {"Fatness", "Color", "Space Mix", "Space Size", "Rise Amount", "Rise Mix", "Width Amount", "Width Spread"};
@@ -14,6 +16,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout layout() {
     juce::StringArray algorithms;
     for (const auto* name : sausage::algorithmNames) algorithms.add(name);
     result.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("algorithm", 2), "Global Algorithm", algorithms, 0));
+    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("satMix", 1), "Saturation Mix", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, juce::AudioParameterFloatAttributes().withLabel("%")));
+    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("satDynamics", 1), "Saturation Dynamics", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, juce::AudioParameterFloatAttributes().withLabel("%")));
+    result.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("satFocus", 1), "Saturation Focus", juce::StringArray {"Neutral", "Keep Low", "Keep High"}, 0));
     return result;
 }
 }
@@ -27,7 +32,9 @@ sausage::RackSettings SausageProcessor::settings(bool hostBypassed) const noexce
     auto value = [this](std::size_t i) { return values[i]->load(std::memory_order_relaxed); };
     return {value(0) / 100.0f, value(1) / 100.0f, value(2) / 100.0f, value(3) / 100.0f,
             value(4) / 100.0f, value(5) / 100.0f, value(6) / 100.0f, value(7) / 100.0f, value(8),
-            value(9) < 0.5f, value(10) < 0.5f, value(11) < 0.5f, value(12) < 0.5f, hostBypassed || value(13) >= 0.5f, static_cast<sausage::Algorithm>(static_cast<int>(value(14)))};
+            value(9) < 0.5f, value(10) < 0.5f, value(11) < 0.5f, value(12) < 0.5f, hostBypassed || value(13) >= 0.5f,
+            static_cast<sausage::Algorithm>(static_cast<int>(value(14))), value(15) / 100.0f, value(16) / 100.0f,
+            static_cast<sausage::SaturationFocus>(static_cast<int>(value(17)))};
 }
 void SausageProcessor::prepareToPlay(double sampleRate, int) { rack.setSettings(settings()); rack.prepare(sampleRate); }
 void SausageProcessor::releaseResources() { rack.reset(); }
@@ -65,6 +72,14 @@ void SausageProcessor::setStateInformation(const void* data, int bytes) {
                 algorithm.setProperty("value", 0.0f, nullptr);
                 state.appendChild(algorithm, nullptr);
             }
+            for (const auto& [id, defaultValue] : std::array<std::pair<const char*, float>, 3>{{
+                     {"satMix", 100.0f}, {"satDynamics", 100.0f}, {"satFocus", 0.0f}}}) {
+                if (!state.getChildWithProperty("id", id).isValid()) {
+                    auto parameter = parameters.copyState().getChildWithProperty("id", id).createCopy();
+                    parameter.setProperty("value", defaultValue, nullptr);
+                    state.appendChild(parameter, nullptr);
+                }
+            }
             parameters.replaceState(state);
         }
 }
@@ -93,6 +108,12 @@ void SausageProcessor::applyRecipe(int index) {
         auto* parameter = parameters.getParameter(ids[i]);
         parameter->beginChangeGesture();
         parameter->setValueNotifyingHost(parameter->convertTo0to1(i < 9 ? recipes[index][i] : 0.0f));
+        parameter->endChangeGesture();
+    }
+    for (std::size_t i = 15; i < 18; ++i) {
+        auto* parameter = parameters.getParameter(ids[i]);
+        parameter->beginChangeGesture();
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(i == 17 ? 0.0f : 100.0f));
         parameter->endChangeGesture();
     }
 }

@@ -49,8 +49,12 @@ void RackEngine::setSettings(RackSettings settings) noexcept {
     target.space = unit(settings.space); target.size = unit(settings.size);
     target.rise = unit(settings.rise); target.riseMix = unit(settings.riseMix);
     target.width = unit(settings.width); target.spread = unit(settings.spread);
+    target.saturationMix = unit(settings.saturationMix); target.dynamics = unit(settings.dynamics);
+    target.focus = settings.focus >= SaturationFocus::Neutral && settings.focus <= SaturationFocus::KeepHigh
+        ? settings.focus : SaturationFocus::Neutral;
     target.outputDb = std::isfinite(settings.outputDb) ? std::clamp(settings.outputDb, -24.0f, 12.0f) : 0.0f;
-    core.setSettings({target.fatness, target.color, 0.0f, !target.sausageOn, target.algorithm});
+    core.setSettings({target.fatness, target.color, 0.0f, !target.sausageOn, target.algorithm,
+                      target.saturationMix, target.dynamics, target.focus});
 }
 void RackEngine::prepare(double sampleRate) {
     rate = std::isfinite(sampleRate) ? std::clamp(sampleRate, 8000.0, 384000.0) : 48000.0;

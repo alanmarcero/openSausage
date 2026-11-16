@@ -21,6 +21,17 @@ float rms(const std::vector<float>& data) {
     for (std::size_t i = data.size() / 2; i < data.size(); ++i) sum += data[i] * data[i];
     return static_cast<float>(std::sqrt(sum / static_cast<double>(data.size() - data.size() / 2)));
 }
+float harmonic(const std::vector<float>& data, float frequency) {
+    double real = 0.0, imaginary = 0.0;
+    constexpr std::size_t begin = 12000;
+    const auto count = data.size() - begin;
+    for (std::size_t i = begin; i < data.size(); ++i) {
+        const auto phase = 2.0 * std::numbers::pi * frequency * static_cast<double>(i) / 48000.0;
+        real += data[i] * std::cos(phase);
+        imaginary += data[i] * std::sin(phase);
+    }
+    return static_cast<float>(2.0 * std::hypot(real, imaginary) / static_cast<double>(count));
+}
 std::vector<float> render(sausage::Settings settings, float frequency = 440.0f) {
     sausage::Core core;
     core.setSettings(settings);
@@ -162,6 +173,49 @@ TEST_CASE("Output automation ramps instead of stepping") {
     REQUIRE(data.front() > 0.24f);
     REQUIRE(data.back() < 0.017f);
     for (std::size_t i = 1; i < data.size(); ++i) REQUIRE(std::abs(data[i] - data[i - 1]) < 0.002f);
+}
+
+TEST_CASE("Saturation mix can blend fully back to latency-aligned dry audio") {
+    sausage::Settings settings;
+    settings.fatness = 0.8f;
+    settings.color = 0.7f;
+    settings.saturationMix = 0.0f;
+    const auto input = sine();
+    const auto output = render(settings);
+    for (std::size_t i = sausage::Core::latency; i < input.size(); ++i)
+        REQUIRE(output[i] == input[i - sausage::Core::latency]);
+}
+
+TEST_CASE("Saturation dynamics amount controls envelope compression") {
+    sausage::Settings compressed;
+    compressed.fatness = 0.7f;
+    compressed.dynamics = 1.0f;
+    sausage::Settings uncompressed = compressed;
+    uncompressed.dynamics = 0.0f;
+    sausage::Core withCompression, withoutCompression;
+    withCompression.setSettings(compressed); withoutCompression.setSettings(uncompressed);
+    withCompression.prepare(48000.0); withoutCompression.prepare(48000.0);
+    auto compressedSignal = sine(120.0f, 2.0f);
+    auto uncompressedSignal = compressedSignal;
+    withCompression.process(compressedSignal.data(), nullptr, static_cast<int>(compressedSignal.size()));
+    withoutCompression.process(uncompressedSignal.data(), nullptr, static_cast<int>(uncompressedSignal.size()));
+    REQUIRE(withCompression.reductionDb() > 1.0f);
+    REQUIRE(withoutCompression.reductionDb() == 0.0f);
+}
+
+TEST_CASE("Saturation focus keeps low sine transients cleaner or dirtier by mode") {
+    sausage::Settings settings;
+    settings.fatness = 0.9f;
+    settings.dynamics = 0.0f;
+    settings.saturationMix = 1.0f;
+    settings.focus = sausage::SaturationFocus::KeepLow;
+    const auto keepLow = harmonic(render(settings, 200.0f), 600.0f);
+    settings.focus = sausage::SaturationFocus::KeepHigh;
+    const auto keepHigh = harmonic(render(settings, 200.0f), 600.0f);
+    settings.focus = sausage::SaturationFocus::Neutral;
+    const auto neutral = harmonic(render(settings, 200.0f), 600.0f);
+    REQUIRE(keepHigh > keepLow * 2.0f);
+    REQUIRE(neutral > keepLow);
 }
 
 TEST_CASE("Empty blocks and disconnected input are harmless") {

@@ -11,6 +11,8 @@ struct RackSettings {
     float outputDb = 0.0f;
     bool sausageOn = true, spaceOn = true, riseOn = true, widthOn = true, bypass = false;
     Algorithm algorithm = Algorithm::Classic;
+    float saturationMix = 1.0f, dynamics = 1.0f;
+    SaturationFocus focus = SaturationFocus::Neutral;
 };
 
 class RackEngine {

@@ -9,7 +9,7 @@ Saturation, reverb, rising pitch, and stereo width.
 
 ![openSausage native editor](assets/native-ui.png)
 
-*Captured from the compiled v1.4.0 native editor with Prism selected. [Capture details and provenance](docs/SCREENSHOTS.md).*
+*Captured from the current compiled native editor. [Capture details and provenance](docs/SCREENSHOTS.md).*
 
 openSausage uses the two-knob saturation workflow of **Sausage Fattener** and original implementations of the three effect types in **Secret Sauce**: Space In-Your-Face, Eternal Return, and Wide Awake Rainbow.
 
@@ -19,7 +19,7 @@ Built by Alan Marcero with C++20 and JUCE 8, following [openGlitchFX](https://gi
 
 | Section | Controls | What it does |
 | --- | --- | --- |
-| **Sausage** | Fatness · Color | Stereo-linked compression and 4× oversampled saturation, with high-frequency emphasis. |
+| **Sausage** | Fatness · Color · Mix · Dynamics · Focus | Stereo-linked compression and 4× oversampled saturation, with parallel blend and selectable frequency focus. |
 | **Space** | Mix · Size | Stereo reverb, from short rooms to long diffuse tails. Size sets the decay. |
 | **Rise** | Rise · Mix | Windowed pitch shifting up to an octave, high-pass lift, and recirculating pitch feedback. Automate Rise for buildups. |
 | **Width** | Width · Spread | Mid/side expansion plus decorrelation that creates stereo information from a mono source. Spread changes the delay spacing or allpass response. |
@@ -42,6 +42,8 @@ Use **Global Algorithm**, beside the recipe menu, to change the character of all
 The selector is automatable and saved with your session. Switching crossfades over 20 ms after priming the new engine's dry delay; the previous mode's tails fade out. Rapid changes settle on the latest choice. Existing sessions open in Classic. All modes retain the same controls, mono support, independent bypasses, and 16-sample host latency.
 
 The new saturation curves combine first-order antiderivative antialiasing with the existing 4× oversampling. These are original implementations of published techniques, with tuning chosen for each mode. See [algorithm sources and implementation notes](docs/ALGORITHMS.md) for equations, references, and tradeoffs.
+
+Saturation **Mix** controls how much of the existing Fatness/Color blend is heard; 0% is clean and 100% preserves the original response. **Dynamics** scales the Fatness-controlled compressor from off to its original amount. **Focus** offers **Neutral**, **Keep Low** (leave lows mostly clean and saturate highs), and **Keep High** (saturate lows and leave highs cleaner). All three controls are automatable and saved with the session. Older sessions default to 100% Mix, 100% Dynamics, and Neutral, preserving their previous sound.
 
 ## Graphics
 
@@ -130,4 +132,4 @@ docs/screenshots/  Earlier development captures
 
 AGPL-3.0. Copyright © 2026 Alan Marcero. See [LICENSE](LICENSE) and [THIRD_PARTY.md](THIRD_PARTY.md).
 
-The [Dada Life product descriptions](https://dadalife.com/plugins/?id=secret-sauce) are the workflow reference. openSausage is an independent implementation with original DSP and artwork. It is not affiliated with Dada Life or Tailored Noise, and is not a bit-identical or measured sonic reproduction of their plugins. The four sections cover Sausage Fattener plus the three Secret Sauce effects; Endless Smile is a separate product.
+The [Dada Life product descriptions](https://dadalife.com/plugins/?id=secret-sauce) are the workflow reference. openSausage is an independent implementation with original DSP and artwork. It is not affiliated with Dada Life or Tailored Noise, and is not a bit-identical or measured sonic reproduction of their plugins. The four sections cover Sausage Fattener plus the three Secret Sauce effects; Endless Smile is a separate product. The new saturation controls were informed by [FabFilter Saturn 2's band Mix and Dynamics controls](docs/COMMERCIAL_RESEARCH.md) and [Softube Saturation Knob's Keep Low / Keep High modes](docs/COMMERCIAL_RESEARCH.md).
