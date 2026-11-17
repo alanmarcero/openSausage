@@ -1,6 +1,12 @@
 #include "SausageLookAndFeel.h"
 
 SausageLookAndFeel::SausageLookAndFeel() {
+    setColourScheme(getDarkColourScheme());
+    setColour(juce::TooltipWindow::backgroundColourId, juce::Colour(0xff152026));
+    setColour(juce::TooltipWindow::textColourId, juce::Colour(0xffe6f0f5));
+    setColour(juce::TooltipWindow::outlineColourId, juce::Colour(0xff48f0c8));
+    setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colour(0xff305350));
+    setColour(juce::PopupMenu::highlightedTextColourId, juce::Colours::white);
     setColour(juce::Slider::textBoxTextColourId, juce::Colour(0xffe6f0f5));
     setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xff152026));
     setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
@@ -41,6 +47,7 @@ void SausageLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int w
     g.fillEllipse(center.x - 3.0f, center.y - 3.0f, 6.0f, 6.0f);
 }
 void SausageLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& button, const juce::Colour&, bool over, bool down) {
+    over = over || button.hasKeyboardFocus(false);
     if (button.getComponentID() == "prevRecipe" || button.getComponentID() == "nextRecipe") {
         g.setColour(juce::Colour(over || down ? 0xff2a3b40 : 0xff182429));
         g.fillRoundedRectangle(button.getLocalBounds().toFloat(), 5.0f);

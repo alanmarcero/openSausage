@@ -19,7 +19,7 @@ Each section has its own bypass. Master bypass skips the full chain and output t
 
 Choose one global style: Classic, Velvet, Punch, or Prism. It changes all four effects while keeping knob settings. Factory recipes provide starting points, including Clean slate, Gentle heat, Wide drums, In orbit, and Lift off.
 
-DAW sessions recall settings. Controls and bypass switches support automation. The editor graphics respond to the effects. Drag a knob to adjust it, double-click to reset it, click its value to type, or hover for help. Resize the editor from its corner.
+DAW sessions recall settings. Controls and bypass switches support automation. The grilled sausage illustration rocks on the host beat and follows tempo changes and seeks. It rests when the host stops. Standalone uses an internal 120 BPM clock. The four effect displays follow the same clock. Drag a knob to adjust it, double-click to reset it, click its value to type, or hover for help. Resize the editor from its corner.
 
 The plugin supports mono and stereo audio. Width needs a stereo output, and its added width disappears when summed to mono. Reported latency stays fixed at 16 samples.
 

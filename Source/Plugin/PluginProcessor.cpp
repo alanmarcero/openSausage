@@ -36,14 +36,30 @@ sausage::RackSettings SausageProcessor::settings(bool hostBypassed) const noexce
             static_cast<sausage::Algorithm>(static_cast<int>(value(14))), value(15) / 100.0f, value(16) / 100.0f,
             static_cast<sausage::SaturationFocus>(static_cast<int>(value(17)))};
 }
-void SausageProcessor::prepareToPlay(double sampleRate, int) { rack.setSettings(settings()); rack.prepare(sampleRate); }
+void SausageProcessor::prepareToPlay(double sampleRate, int) { clockRate = sampleRate; rack.setSettings(settings()); rack.prepare(sampleRate); }
 void SausageProcessor::releaseResources() { rack.reset(); }
 bool SausageProcessor::isBusesLayoutSupported(const BusesLayout& buses) const {
     const auto input = buses.getMainInputChannelSet();
     return (input == juce::AudioChannelSet::mono() || input == juce::AudioChannelSet::stereo()) && input == buses.getMainOutputChannelSet();
 }
+void SausageProcessor::updateBeatClock(int samples) {
+    double tempo = 120.0;
+    bool running = true;
+    if (auto* host = getPlayHead(); host && wrapperType != wrapperType_Standalone) {
+        if (auto position = host->getPosition()) {
+            running = position->getIsPlaying();
+            if (const auto bpm = position->getBpm(); bpm && std::isfinite(*bpm) && *bpm > 0) tempo = *bpm;
+            if (const auto ppq = position->getPpqPosition(); ppq && std::isfinite(*ppq)) visualQuarter = *ppq;
+            else if (const auto seconds = position->getTimeInSeconds(); seconds && std::isfinite(*seconds)) visualQuarter = *seconds * tempo / 60.0;
+        }
+    }
+    if (running && clockRate > 0) visualQuarter += samples * tempo / (60.0 * clockRate);
+    beatPhase.store(static_cast<float>(visualQuarter-std::floor(visualQuarter)), std::memory_order_relaxed);
+}
+
 void SausageProcessor::process(juce::AudioBuffer<float>& buffer, bool hostBypassed) {
     juce::ScopedNoDenormals noDenormals;
+    updateBeatClock(buffer.getNumSamples());
     for (int channel = getTotalNumInputChannels(); channel < buffer.getNumChannels(); ++channel) buffer.clear(channel, 0, buffer.getNumSamples());
     if (buffer.getNumSamples() == 0 || getTotalNumInputChannels() == 0) return;
     float input = 0.0f;

@@ -27,6 +27,30 @@ int main(int argc, char** argv) {
         processor.prepareToPlay(48000, 256);
         std::unique_ptr<juce::AudioProcessorEditor> editor(processor.createEditor());
         require(editor != nullptr, "Editor missing");
+        struct PlayHead final : juce::AudioPlayHead {
+            PositionInfo info;
+            juce::Optional<PositionInfo> getPosition() const override { return info; }
+        } head;
+        processor.setPlayHead(&head);
+        juce::AudioBuffer<float> clockAudio(2,256);
+        juce::MidiBuffer clockMidi;
+        const auto phase = [&](double position, double tempo, bool playing) {
+            head.info.setPpqPosition(position);
+            head.info.setBpm(tempo);
+            head.info.setIsPlaying(playing);
+            clockAudio.clear();
+            processor.processBlock(clockAudio, clockMidi);
+            return processor.beatPhase.load();
+        };
+        require(std::abs(phase(3.42,120,true)-.430667f)<.00001f, "Host beat");
+        const auto firstFrame = editor->createComponentSnapshot({16,5,150,150});
+        require(std::abs(phase(-.75,60,false)-.25f)<.00001f, "Stopped negative seek");
+        const auto heldFrame = editor->createComponentSnapshot({16,5,150,150});
+        int changedPixels = 0;
+        for (int y=0;y<150;++y) for (int x=0;x<150;++x)
+            if (firstFrame.getPixelAt(x,y)!=heldFrame.getPixelAt(x,y)) ++changedPixels;
+        require(changedPixels>40, "SVG moves on the real host beat");
+        processor.setPlayHead(nullptr);
         auto* saturationMix = dynamic_cast<juce::Slider*>(find(*editor, "satMix"));
         auto* dynamics = dynamic_cast<juce::Slider*>(find(*editor, "satDynamics"));
         auto* focus = dynamic_cast<juce::ComboBox*>(find(*editor, "satFocus"));

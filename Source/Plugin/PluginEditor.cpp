@@ -3,16 +3,6 @@
 
 namespace {
 const juce::Colour ink(0xffe6f0f5), cream(0xffe6f0f5), panel(0xf2152026);
-juce::Image trimAlpha(const juce::Image& image) {
-    int left = image.getWidth(), top = image.getHeight(), right = 0, bottom = 0;
-    for (int y = 0; y < image.getHeight(); ++y)
-        for (int x = 0; x < image.getWidth(); ++x)
-            if (image.getPixelAt(x, y).getAlpha() > 32) {
-                left = std::min(left, x); top = std::min(top, y);
-                right = std::max(right, x); bottom = std::max(bottom, y);
-            }
-    return image.getClippedImage({left, top, right - left + 1, bottom - top + 1});
-}
 void text(juce::Graphics& g, const juce::String& value, juce::Rectangle<int> box, float height,
           juce::Colour color = ink, int style = juce::Font::plain, juce::Justification align = juce::Justification::centredLeft) {
     g.setColour(color);
@@ -178,9 +168,7 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
       widthPanel(owner.parameters, "Width", "STEREO WIDENER", "width", "Width", "spread", "Spread", "widthBypass", juce::Colour(0xff48f0c8), "Stereo width and spacing."),
       outputAttachment(owner.parameters, "output", output), bypassAttachment(owner.parameters, "bypass", bypass) {
     setLookAndFeel(&look);
-    const auto sheet = juce::ImageCache::getFromMemory(BinaryData::sausageexpressions_png, BinaryData::sausageexpressions_pngSize);
-    for (int frame = 0; frame < 3; ++frame)
-        faces[static_cast<std::size_t>(frame)] = trimAlpha(sheet.getClippedImage({frame * sheet.getWidth() / 3, 0, sheet.getWidth() / 3, sheet.getHeight()}));
+    grill = juce::Drawable::createFromImageData(BinaryData::grill_svg, BinaryData::grill_svgSize);
     for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) addAndMakeVisible(p);
     dial(output, "output", juce::Colour(0xffffbe3b));
     output.setTextValueSuffix(" dB"); output.setTooltip("Final output trim, after all four effects. Master bypass ignores trim.");
@@ -188,6 +176,7 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     bypass.setComponentID("bypass"); bypass.setName("Master bypass"); bypass.setClickingTogglesState(true);
     bypass.setTooltip("Bypass the complete chain, preserving the reported 16-sample latency.");
     recipes.setComponentID("recipes"); recipes.setTextWhenNothingSelected("CHOOSE A RECIPE");
+    recipes.setTooltip("Choose a factory recipe for the four effect sections");
     recipes.addItemList({"01 / Clean slate", "02 / Gentle heat", "03 / Wide drums", "04 / In orbit", "05 / Lift off",
                          "06 / Big room lead", "07 / Tech house bass", "08 / Dubstep wobble heat", "09 / Trance super-saw",
                          "10 / Drum & bass break", "11 / Future rave punch", "12 / Deep house warmth", "13 / Hardstyle raw distortion",
@@ -230,28 +219,35 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     startTimerHz(25);
 }
 SausageEditor::~SausageEditor() { stopTimer(); setLookAndFeel(nullptr); }
+float SausageEditor::animationPhase() const noexcept {
+    const float phase = ownerProcessor.beatPhase.load(std::memory_order_relaxed);
+    const double idle = std::fmod(juce::Time::getMillisecondCounterHiRes(), 500.0) / 500.0;
+    return (phase >= 0.0f ? phase : static_cast<float>(idle)) * juce::MathConstants<float>::twoPi;
+}
 void SausageEditor::timerCallback() {
-    animationPhase += 0.13f;
-    for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) p->advanceAnimation();
+    for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) p->setBeatPhase(animationPhase());
     repaint();
 }
 void SausageEditor::paint(juce::Graphics& g) {
     g.addTransform(juce::AffineTransform::scale(static_cast<float>(getWidth()) / 1160.0f));
     g.fillAll(juce::Colour(0xff0d1317));
     g.drawImage(enamel, juce::Rectangle<float>(0, 0, 1160, 720), juce::RectanglePlacement::stretchToFit);
-    g.setColour(juce::Colour(0xff0d1317).withAlpha(0.88f)); g.fillRect(0, 0, 1160, 720);
+    g.setColour(juce::Colour(0xff0d1317).withAlpha(0.95f)); g.fillRect(0, 0, 1160, 720);
     const bool sausageBypassed = ownerProcessor.parameters.getRawParameterValue("sausageBypass")->load() > 0.5f
                              || ownerProcessor.parameters.getRawParameterValue("bypass")->load() > 0.5f;
     const auto fat = sausageBypassed ? 0.0f : ownerProcessor.parameters.getRawParameterValue("fatness")->load() / 100.0f;
-    const auto frame = fat < 0.4f ? 0 : fat < 0.75f ? 1 : 2;
-    const auto bodyWidth = 94.0f + fat * 26.0f;
-    const auto bounce = std::sin(animationPhase) * fat * 3.0f;
-    g.setOpacity(1.0f);
-    g.drawImage(faces[static_cast<std::size_t>(frame)], juce::Rectangle<float>(99.0f - bodyWidth * 0.5f, 9.0f + bounce, bodyWidth, 145.0f + fat * 4.0f), juce::RectanglePlacement::stretchToFit);
+    if (grill) {
+        juce::Graphics::ScopedSaveState save(g);
+        const float pulse = std::cos(animationPhase());
+        const float width = 135.0f + 15.0f*fat + 3.0f*pulse;
+        g.addTransform(juce::AffineTransform::rotation(.042f*pulse, 102.0f, 86.0f));
+        grill->drawWithin(g, {101.0f-width*.5f, 8.0f - 3.0f*pulse, width, 145.0f},
+                          juce::RectanglePlacement::centred, 1.0f);
+    }
     text(g, "openSausage", {186, 23, 650, 66}, 60.0f, ink, juce::Font::bold);
-    text(g, "Saturation / Space / Pitch / Stereo", {190, 94, 520, 25}, 14.0f, ink, juce::Font::bold);
-    text(g, "Algorithm", {640, 81, 180, 20}, 14.0f, ink, juce::Font::bold);
-    text(g, "Recipe", {834, 81, 284, 20}, 14.0f, ink, juce::Font::bold);
+    text(g, "Saturation / Space / Pitch / Stereo", {190, 94, 330, 25}, 14.0f, ink, juce::Font::bold);
+    text(g, "Algorithm", {532, 81, 145, 20}, 14.0f, ink, juce::Font::bold);
+    text(g, "Recipe", {706, 81, 412, 20}, 14.0f, ink, juce::Font::bold);
     text(g, "ALAN MARCERO", {930, 31, 196, 24}, 15.0f, ink, juce::Font::bold, juce::Justification::centredRight);
     g.setColour(juce::Colour(0xf00c1418)); g.fillRect(0, 609, 1160, 111);
     g.setColour(juce::Colour(0xff48f0c8).withAlpha(0.4f)); g.drawHorizontalLine(609, 24, 1136);
@@ -272,10 +268,10 @@ void SausageEditor::resized() {
     sausagePanel.setBounds(24, 172, 266, 415); spacePanel.setBounds(306, 172, 266, 415);
     risePanel.setBounds(588, 172, 266, 415); widthPanel.setBounds(870, 172, 266, 415);
     output.setBounds(548, 611, 108, 74); bypass.setBounds(934, 633, 192, 36);
-    prevRecipe.setBounds(834, 104, 72, 36);
-    recipes.setBounds(910, 104, 136, 36);
-    nextRecipe.setBounds(1050, 104, 68, 36);
-    algorithms.setBounds(640, 104, 180, 36);
+    prevRecipe.setBounds(706, 104, 74, 36);
+    recipes.setBounds(786, 104, 236, 36);
+    nextRecipe.setBounds(1028, 104, 90, 36);
+    algorithms.setBounds(532, 104, 158, 36);
     const auto transform = juce::AffineTransform::scale(static_cast<float>(getWidth()) / 1160.0f);
     std::ranges::for_each(std::initializer_list<juce::Component*> {&sausagePanel, &spacePanel, &risePanel, &widthPanel, &output, &bypass, &recipes, &algorithms, &prevRecipe, &nextRecipe},
                           [transform](juce::Component* child) { child->setTransform(transform); });

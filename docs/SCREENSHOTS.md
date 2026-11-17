@@ -1,8 +1,8 @@
 # Native UI screenshot
 
-![Compiled plugin editor with Prism selected](../assets/native-ui.png)
+![Compiled plugin editor and beat-synced grill illustration](../assets/native-ui.png)
 
-`assets/native-ui.png` is a fresh macOS capture from the current Release build's native JUCE editor using `sausage_editor_capture`. The harness snapshot shows the new Saturation Mix, Dynamics, and Focus controls in the compiled editor. Captures are JUCE component snapshots at 1.5× scale (1740 × 1080); they are not UI mockups or screenshots of a published release archive.
+`assets/native-ui.png` is a fresh macOS capture from the current Release build's native JUCE editor using `sausage_editor_capture`. The header shows the bundled SVG illustration. Its position and rotation follow the transport beat, including a held negative PPQ seek verified in the harness. Captures are JUCE component snapshots at 1.5× scale.
 
 The harness exercises all four algorithm choices, their actual audio output, host automation, recipe defaults, legacy/current state recall, saturation controls, bypass controls, and resizing before completing successfully. It writes one image for each algorithm plus clean, maximum-Fatness, buildup, bypassed, and compact states under `docs/screenshots/`.
 
