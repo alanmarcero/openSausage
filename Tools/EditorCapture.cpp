@@ -166,7 +166,7 @@ int main(int argc, char** argv) {
         for (const auto* id : {"sausageBypass", "spaceBypass", "riseBypass", "widthBypass"})
             dynamic_cast<juce::TextButton*>(find(*editor, id))->setToggleState(true, juce::sendNotificationSync);
         save(*editor, output, "openSausage-bypassed.png");
-        editor->setSize(870, 540);
+        editor->setSize(1160, 720);
         for (auto* child : editor->getChildren())
             if (dynamic_cast<juce::ResizableCornerComponent*>(child))
                 require(std::abs(child->getBoundsInParent().getRight() - editor->getWidth()) <= 1,
