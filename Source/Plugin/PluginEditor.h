@@ -9,7 +9,7 @@ public:
                 const juce::String& secondaryLabel, const juce::String& bypassId, juce::Colour accent, const juce::String& hint);
     void paint(juce::Graphics&) override;
     void resized() override;
-    void advanceAnimation() noexcept { phase += 0.09f; }
+    void setBeatPhase(float position) noexcept { phase = position; }
 private:
     juce::String title, subtitle, primaryLabel, secondaryLabel, hint;
     juce::Colour accent;
@@ -39,9 +39,9 @@ private:
     void timerCallback() override;
     SausageProcessor& ownerProcessor;
     SausageLookAndFeel look;
-    std::array<juce::Image, 3> faces;
+    std::unique_ptr<juce::Drawable> grill;
     juce::Image enamel;
-    float animationPhase = 0.0f;
+    float animationPhase() const noexcept;
     ModulePanel sausagePanel, spacePanel, risePanel, widthPanel;
     juce::Slider output;
     juce::TextButton bypass;

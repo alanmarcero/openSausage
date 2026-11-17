@@ -27,9 +27,12 @@ public:
     juce::AudioProcessorParameter* getBypassParameter() const override;
     void applyRecipe(int index);
     juce::AudioProcessorValueTreeState parameters;
+    std::atomic<float> beatPhase {-1.0f};
     std::atomic<float> inputPeak {0.0f}, outputPeak {0.0f}, gainReduction {0.0f};
 private:
     sausage::Rack rack;
+    double visualQuarter = 0.0, clockRate = 44100.0;
+    void updateBeatClock(int samples);
     std::array<std::atomic<float>*, 18> values {};
     sausage::RackSettings settings(bool hostBypassed = false) const noexcept;
     void process(juce::AudioBuffer<float>&, bool hostBypassed);
