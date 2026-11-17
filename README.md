@@ -7,7 +7,7 @@
 
 Saturation, reverb, rising pitch, and stereo width.
 
-![openSausage native editor](assets/native-ui.png)
+![openSausage editor with graphite surfaces, mint controls, and amber output (v1.6.1)](assets/native-ui.png)
 
 *Captured from the current compiled native editor. [Capture details and provenance](docs/SCREENSHOTS.md).*
 
