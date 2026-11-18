@@ -37,6 +37,12 @@ float RackEngine::Delay::read(float delay) const noexcept {
 
     return ((c3 * fraction + c2) * fraction + c1) * fraction + c0;
 }
+float RackEngine::Delay::readFixed(std::size_t delaySamples) const noexcept {
+    if (data.empty()) return 0.0f;
+    const auto sz = data.size();
+    const auto d = std::min(delaySamples, sz - 1);
+    return data[position >= d ? position - d : position + sz - d];
+}
 void RackEngine::Delay::write(float sample) noexcept {
     if (data.empty()) return;
     data[position] = sample;
@@ -126,8 +132,9 @@ void RackEngine::process(float* left, float* right, int samples) noexcept {
             std::array<float, 8> echoes {}, feedbackSignal {};
             const auto damping = mode == Algorithm::Velvet ? 0.6f : mode == Algorithm::Prism ? 0.2f : 0.35f;
             for (std::size_t tap = 0; tap < combs.size(); ++tap) {
-                const auto length = static_cast<float>(combs[tap].data.size() - 1);
-                echoes[tap] = combs[tap].read(mode == Algorithm::Punch ? std::floor(length * 0.4f) : length);
+                const auto len = combs[tap].data.size() - 1;
+                const auto delaySamples = mode == Algorithm::Punch ? static_cast<std::size_t>(std::floor(static_cast<float>(len) * 0.4f)) : len;
+                echoes[tap] = combs[tap].readFixed(delaySamples);
                 damp[tap] = echoes[tap] * (1.0f - damping) + damp[tap] * damping;
                 feedbackSignal[tap] = damp[tap];
                 wet[tap / 4] += echoes[tap] * 0.6f;
@@ -153,7 +160,7 @@ void RackEngine::process(float* left, float* right, int samples) noexcept {
             // Freeverb's version outputs delayed - input, which is not allpass and boosts some frequencies up to 4x.
             for (std::size_t ch = 0; ch < diffusers.size(); ++ch) {
                 for (auto& allpass : diffusers[ch]) {
-                    const auto delayed = allpass.read(static_cast<float>(allpass.data.size() - 1));
+                    const auto delayed = allpass.readFixed(allpass.data.size() - 1);
                     const auto fed = wet[ch] + 0.5f * delayed;
                     allpass.write(fed);
                     wet[ch] = delayed - 0.5f * fed;

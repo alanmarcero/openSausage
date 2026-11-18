@@ -13,6 +13,11 @@ float follow(float value, float goal, float coefficient) noexcept {
 }
 }
 
+void Core::Fir::push(float input) noexcept {
+    history[static_cast<std::size_t>(position)] = input;
+    if (++position == 65) position = 0;
+}
+
 float Core::Fir::tick(float input, const std::array<float, 65>& taps) noexcept {
     history[static_cast<std::size_t>(position)] = input;
     float result = 0.0f;
@@ -20,6 +25,20 @@ float Core::Fir::tick(float input, const std::array<float, 65>& taps) noexcept {
     for (std::size_t tap = 0; tap < taps.size(); ++tap) {
         result += taps[tap] * history[static_cast<std::size_t>(index)];
         if (--index < 0) index = 64;
+    }
+    if (++position == 65) position = 0;
+    return result;
+}
+
+float Core::Fir::tickUpsampleZeroStuffed(float input, int sub, const std::array<float, 65>& taps) noexcept {
+    history[static_cast<std::size_t>(position)] = input;
+    float result = 0.0f;
+    int index = position - sub;
+    if (index < 0) index += 65;
+    for (std::size_t tap = static_cast<std::size_t>(sub); tap < taps.size(); tap += 4) {
+        result += taps[tap] * history[static_cast<std::size_t>(index)];
+        index -= 4;
+        if (index < 0) index += 65;
     }
     if (++position == 65) position = 0;
     return result;
@@ -67,6 +86,7 @@ void Core::reset() noexcept {
 
 void Core::process(float* left, float* right, int samples) noexcept {
     if (left == nullptr || samples <= 0) return;
+    float lastCompression = 1.0f;
     for (int i = 0; i < samples; ++i) {
         current.fatness = follow(current.fatness, target.fatness, smoothing);
         current.color = follow(current.color, target.color, smoothing);
@@ -76,44 +96,68 @@ void Core::process(float* left, float* right, int samples) noexcept {
         focusPosition = follow(focusPosition, static_cast<float>(target.focus), smoothing);
         active = follow(active, target.bypass ? 0.0f : 1.0f, smoothing);
         const float input[] {std::clamp(finite(left[i]), -32.0f, 32.0f), right ? std::clamp(finite(right[i]), -32.0f, 32.0f) : 0.0f};
+        if (active == 0.0f && target.bypass) {
+            for (int ch = 0; ch < (right ? 2 : 1); ++ch) {
+                auto& state = channels[static_cast<std::size_t>(ch)];
+                const auto dry = state.dry[static_cast<std::size_t>(dryPosition)];
+                state.dry[static_cast<std::size_t>(dryPosition)] = input[ch];
+                (ch == 0 ? left : right)[i] = dry;
+            }
+            dryPosition = (dryPosition + 1) % latency;
+            continue;
+        }
         const auto peak = std::max(std::abs(input[0]), std::abs(input[1]));
         envelope = follow(envelope, peak, peak > envelope ? attack : release);
-        const auto threshold = std::pow(10.0f, -14.0f * current.fatness / 20.0f);
-        const auto requestedCompression = envelope > threshold ? std::pow(threshold / envelope, 1.0f - 1.0f / (1.0f + 7.0f * current.fatness)) : 1.0f;
+        const auto threshold = current.fatness > 0.0f ? std::pow(10.0f, -14.0f * current.fatness / 20.0f) : 1.0f;
+        const auto requestedCompression = (current.fatness > 0.0f && envelope > threshold)
+            ? std::pow(threshold / envelope, 1.0f - 1.0f / (1.0f + 7.0f * current.fatness))
+            : 1.0f;
         const auto compression = 1.0f + current.dynamics * (requestedCompression - 1.0f);
-        reduction = -20.0f * std::log10(std::max(compression, 1.0e-8f));
+        lastCompression = compression;
         const auto drive = 1.0f + 24.0f * current.fatness;
         const auto legacyBlend = std::min(1.0f, current.fatness * 5.0f + current.color * 3.0f);
         const auto blend = legacyBlend * current.saturationMix;
         const auto neutralWeight = std::max(0.0f, 1.0f - focusPosition);
         const auto keepLowWeight = focusPosition < 1.0f ? focusPosition : 2.0f - focusPosition;
         const auto keepHighWeight = std::max(0.0f, focusPosition - 1.0f);
-        const auto gain = std::pow(10.0f, current.outputDb / 20.0f);
+        const auto gain = current.outputDb == 0.0f ? 1.0f : std::pow(10.0f, current.outputDb / 20.0f);
         for (int ch = 0; ch < (right ? 2 : 1); ++ch) {
             auto& state = channels[static_cast<std::size_t>(ch)];
             const auto dry = state.dry[static_cast<std::size_t>(dryPosition)];
             state.dry[static_cast<std::size_t>(dryPosition)] = input[ch];
             float wet = 0.0f;
             for (int sub = 0; sub < 4; ++sub) {
-                const auto up = state.up.tick(sub == 0 ? input[ch] * 4.0f : 0.0f, coefficients);
+                const auto up = state.up.tickUpsampleZeroStuffed(sub == 0 ? input[ch] * 4.0f : 0.0f, sub, coefficients);
                 state.low = up + tonePole * (state.low - up);
                 const auto high = up - state.low;
                 const auto colored = up + current.color * 2.5f * high;
-                const auto neutral = state.shapers[0].process(colored * compression * drive, target.algorithm);
-                const auto keepLow = state.low + state.shapers[1].process(high * (1.0f + current.color * 2.5f) * compression * drive, target.algorithm);
-                const auto keepHigh = high + state.shapers[2].process(state.low * compression * drive, target.algorithm);
-                const auto shaped = neutralWeight * neutral + keepLowWeight * keepLow + keepHighWeight * keepHigh;
+                float shaped = 0.0f;
+                if (neutralWeight > 0.0f) {
+                    shaped += neutralWeight * state.shapers[0].process(colored * compression * drive, target.algorithm);
+                }
+                if (keepLowWeight > 0.0f) {
+                    const auto keepLow = state.low + state.shapers[1].process(high * (1.0f + current.color * 2.5f) * compression * drive, target.algorithm);
+                    shaped += keepLowWeight * keepLow;
+                }
+                if (keepHighWeight > 0.0f) {
+                    const auto keepHigh = high + state.shapers[2].process(state.low * compression * drive, target.algorithm);
+                    shaped += keepHighWeight * keepHigh;
+                }
                 const auto saturated = colored + current.fatness * (shaped - colored);
                 const auto dc = saturated - state.dcInput + dcPole * state.dcOutput;
                 state.dcInput = saturated;
                 state.dcOutput = dc;
-                const auto down = state.down.tick(dc, coefficients);
-                if (sub == 0) wet = down;
+                if (sub == 0) {
+                    wet = state.down.tick(dc, coefficients);
+                } else {
+                    state.down.push(dc);
+                }
             }
             const auto processed = (dry + blend * (wet - dry)) * gain;
             (ch == 0 ? left : right)[i] = active == 0.0f ? dry : dry + active * (processed - dry);
         }
         dryPosition = (dryPosition + 1) % latency;
     }
+    reduction = (active == 0.0f && target.bypass) ? 0.0f : -20.0f * std::log10(std::max(lastCompression, 1.0e-8f));
 }
 }

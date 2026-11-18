@@ -249,7 +249,9 @@ float SausageEditor::animationPhase() const noexcept {
 }
 void SausageEditor::timerCallback() {
     for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) p->setBeatPhase(animationPhase());
-    repaint();
+    const float scale = static_cast<float>(getWidth()) / 1160.0f;
+    repaint(juce::Rectangle<float>(20.0f * scale, 4.0f * scale, 175.0f * scale, 160.0f * scale).toNearestInt());
+    repaint(juce::Rectangle<float>(24.0f * scale, 615.0f * scale, 845.0f * scale, 65.0f * scale).toNearestInt());
 }
 void SausageEditor::paint(juce::Graphics& g) {
     g.addTransform(juce::AffineTransform::scale(static_cast<float>(getWidth()) / 1160.0f));

@@ -31,6 +31,7 @@ private:
         void resize(std::size_t size);
         void clear() noexcept;
         float read(float delay) const noexcept;
+        float readFixed(std::size_t delaySamples) const noexcept;
         void write(float sample) noexcept;
     };
     Core core;
