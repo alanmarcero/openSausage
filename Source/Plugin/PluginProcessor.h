@@ -1,6 +1,13 @@
 #pragma once
 #include "SauceRack.h"
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <vector>
+
+struct SausageRecipe {
+    const char* name;
+    float fatness, color, space, size, rise, riseMix, width, spread, output;
+    float satMix = 100.0f, satDynamics = 100.0f, satFocus = 0.0f, preDelay = 0.0f, masterMix = 100.0f, softClip = 0.0f;
+};
 
 class SausageProcessor final : public juce::AudioProcessor {
 public:
@@ -26,6 +33,7 @@ public:
     void setStateInformation(const void*, int) override;
     juce::AudioProcessorParameter* getBypassParameter() const override;
     void applyRecipe(int index);
+    static const std::vector<SausageRecipe>& factoryRecipes();
     juce::AudioProcessorValueTreeState parameters;
     std::atomic<float> beatPhase {-1.0f};
     std::atomic<float> inputPeak {0.0f}, outputPeak {0.0f}, gainReduction {0.0f};

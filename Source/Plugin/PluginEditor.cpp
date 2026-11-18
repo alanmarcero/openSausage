@@ -199,11 +199,24 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     bypass.setComponentID("bypass"); bypass.setName("Master bypass"); bypass.setClickingTogglesState(true);
     bypass.setTooltip("Bypass the complete chain, preserving the reported 16-sample latency.");
     recipes.setComponentID("recipes"); recipes.setTextWhenNothingSelected("CHOOSE A RECIPE");
-    recipes.setTooltip("Choose a factory recipe for the four effect sections");
-    recipes.addItemList({"01 / Clean slate", "02 / Gentle heat", "03 / Wide drums", "04 / In orbit", "05 / Lift off",
-                         "06 / Big room lead", "07 / Tech house bass", "08 / Dubstep wobble heat", "09 / Trance super-saw",
-                         "10 / Drum & bass break", "11 / Future rave punch", "12 / Deep house warmth", "13 / Hardstyle raw distortion",
-                         "14 / Electro dirty synth", "15 / Festival drop slam", "16 / Vocal build riser", "17 / Sub crusher"}, 1);
+    recipes.setTooltip("Choose a dance-style factory recipe for the four effect sections");
+    std::vector<juce::String> groups;
+    std::vector<juce::PopupMenu> menus;
+    std::ranges::for_each(SausageProcessor::factoryRecipes(), [&, id = 1](const SausageRecipe& recipe) mutable {
+        const juce::String full(recipe.name);
+        const auto group = full.upToFirstOccurrenceOf(" / ", false, false);
+        const auto it = std::ranges::find(groups, group);
+        const auto idx = static_cast<std::size_t>(std::distance(groups.begin(), it));
+        if (it == groups.end()) {
+            groups.push_back(group);
+            menus.emplace_back();
+        }
+        menus[idx].addItem(id++, full);
+    });
+    auto* root = recipes.getRootMenu();
+    std::ranges::for_each(groups, [&, i = std::size_t{0}](const juce::String& group) mutable {
+        root->addSubMenu(group, menus[i++]);
+    });
     recipes.onChange = [this] {
         const auto selected = recipes.getSelectedId();
         if (selected > 0) {
