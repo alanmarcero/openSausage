@@ -12,7 +12,8 @@ SausageLookAndFeel::SausageLookAndFeel() {
     setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff152026));
     setColour(juce::ComboBox::textColourId, juce::Colour(0xffe6f0f5));
-    setColour(juce::ComboBox::outlineColourId, juce::Colours::transparentBlack);
+    setColour(juce::ComboBox::outlineColourId, juce::Colour(0xff283842));
+    setColour(juce::ComboBox::arrowColourId, juce::Colour(0xff48f0c8));
     setColour(juce::PopupMenu::backgroundColourId, juce::Colour(0xff152026));
     setColour(juce::PopupMenu::textColourId, juce::Colour(0xffe6f0f5));
 }
@@ -48,15 +49,30 @@ void SausageLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int w
 }
 void SausageLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& button, const juce::Colour&, bool over, bool down) {
     over = over || button.hasKeyboardFocus(false);
+    const auto bounds = button.getLocalBounds().toFloat().reduced(0.5f);
     if (button.getComponentID() == "prevRecipe" || button.getComponentID() == "nextRecipe") {
         g.setColour(juce::Colour(over || down ? 0xff2a3b40 : 0xff182429));
-        g.fillRoundedRectangle(button.getLocalBounds().toFloat(), 5.0f);
+        g.fillRoundedRectangle(bounds, 5.0f);
+        g.setColour(juce::Colour(0xff283842));
+        g.drawRoundedRectangle(bounds, 5.0f, 1.0f);
+        return;
+    }
+    if (button.getComponentID() == "softClip") {
+        const auto enabled = button.getToggleState();
+        g.setColour(juce::Colour(over || down ? 0xff2a3b40 : 0xff182429));
+        g.fillRoundedRectangle(bounds, 5.0f);
+        g.setColour(enabled ? juce::Colour(0xff48f0c8) : juce::Colour(0xff283842));
+        g.drawRoundedRectangle(bounds, 5.0f, 1.0f);
+        g.setColour(enabled ? juce::Colour(0xff48f0c8) : juce::Colour(0xff536266));
+        g.fillEllipse(10.0f, static_cast<float>(button.getHeight()) / 2.0f - 3.0f, 6.0f, 6.0f);
         return;
     }
     const auto bypassed = button.getToggleState();
     g.setColour(bypassed ? juce::Colour(0xff30373a) : juce::Colour(0xff182429));
     if (over || down) g.setColour(bypassed ? juce::Colour(0xff43494b) : juce::Colour(0xff2a3b40));
-    g.fillRoundedRectangle(button.getLocalBounds().toFloat(), 5.0f);
+    g.fillRoundedRectangle(bounds, 5.0f);
+    g.setColour(juce::Colour(0xff283842));
+    g.drawRoundedRectangle(bounds, 5.0f, 1.0f);
     g.setColour(bypassed ? juce::Colour(0xffffbe3b) : juce::Colour(0xff48f0c8));
     g.fillEllipse(10.0f, static_cast<float>(button.getHeight()) / 2.0f - 3.0f, 6.0f, 6.0f);
 }
@@ -65,6 +81,12 @@ void SausageLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& but
         g.setColour(juce::Colour(0xffe6f0f5));
         g.setFont(juce::FontOptions(14.0f, juce::Font::bold));
         g.drawText(button.getButtonText(), button.getLocalBounds(), juce::Justification::centred);
+        return;
+    }
+    if (button.getComponentID() == "softClip") {
+        g.setColour(button.getToggleState() ? juce::Colour(0xff48f0c8) : juce::Colour(0xff869ca8));
+        g.setFont(juce::FontOptions(13.5f, juce::Font::bold));
+        g.drawText("Soft Clip", button.getLocalBounds().withTrimmedLeft(20), juce::Justification::centred);
         return;
     }
     g.setColour(button.getToggleState() ? juce::Colour(0xff869ca8) : juce::Colour(0xffe6f0f5));

@@ -33,7 +33,7 @@ private:
     sausage::Rack rack;
     double visualQuarter = 0.0, clockRate = 44100.0;
     void updateBeatClock(int samples);
-    std::array<std::atomic<float>*, 18> values {};
+    std::array<std::atomic<float>*, 21> values {};
     sausage::RackSettings settings(bool hostBypassed = false) const noexcept;
     void process(juce::AudioBuffer<float>&, bool hostBypassed);
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SausageProcessor)

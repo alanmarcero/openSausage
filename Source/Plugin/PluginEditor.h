@@ -20,12 +20,12 @@ private:
     std::atomic<float>* algorithm;
     int kind = 0;
     float phase = 0.0f;
-    juce::Slider primary, secondary, saturationMix, dynamics;
+    juce::Slider primary, secondary, saturationMix, dynamics, preDelay;
     juce::ComboBox focus;
     juce::TextButton bypass;
     juce::AudioProcessorValueTreeState::SliderAttachment primaryAttachment, secondaryAttachment;
     juce::AudioProcessorValueTreeState::ButtonAttachment bypassAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> saturationMixAttachment, dynamicsAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> saturationMixAttachment, dynamicsAttachment, preDelayAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> focusAttachment;
 };
 
@@ -43,14 +43,14 @@ private:
     juce::Image enamel;
     float animationPhase() const noexcept;
     ModulePanel sausagePanel, spacePanel, risePanel, widthPanel;
-    juce::Slider output;
-    juce::TextButton bypass;
+    juce::Slider output, masterMix;
+    juce::TextButton bypass, softClip{"Soft Clip"};
     juce::ComboBox recipes, algorithms;
     juce::TextButton prevRecipe{"Previous"}, nextRecipe{"Next"};
     int currentRecipe = -1;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> algorithmAttachment;
-    juce::AudioProcessorValueTreeState::SliderAttachment outputAttachment;
-    juce::AudioProcessorValueTreeState::ButtonAttachment bypassAttachment;
+    juce::AudioProcessorValueTreeState::SliderAttachment outputAttachment, masterMixAttachment;
+    juce::AudioProcessorValueTreeState::ButtonAttachment bypassAttachment, softClipAttachment;
     juce::TooltipWindow tooltip {this, 500};
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SausageEditor)
 };

@@ -56,7 +56,7 @@ ModulePanel::ModulePanel(juce::AudioProcessorValueTreeState& state, const juce::
         dial(dynamics, "satDynamics", color);
         for (auto* slider : {&saturationMix, &dynamics}) {
             slider->setSliderStyle(juce::Slider::LinearHorizontal);
-            slider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 56, 24);
+            slider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 52, 24);
             slider->setNumDecimalPlacesToDisplay(0);
         }
         saturationMix.setDoubleClickReturnValue(true, 100.0);
@@ -70,6 +70,16 @@ ModulePanel::ModulePanel(juce::AudioProcessorValueTreeState& state, const juce::
         dynamicsAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, "satDynamics", dynamics);
         focusAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(state, "satFocus", focus);
         addAndMakeVisible(saturationMix); addAndMakeVisible(dynamics); addAndMakeVisible(focus);
+    } else if (kind == 1) {
+        dial(preDelay, "preDelay", color);
+        preDelay.setSliderStyle(juce::Slider::LinearHorizontal);
+        preDelay.setTextBoxStyle(juce::Slider::TextBoxRight, false, 52, 24);
+        preDelay.setTextValueSuffix(" ms");
+        preDelay.setNumDecimalPlacesToDisplay(0);
+        preDelay.setDoubleClickReturnValue(true, 0.0);
+        preDelay.setTooltip("Space pre-delay (0 to 100 ms) so transients punch through before the reverb tail.");
+        preDelayAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, "preDelay", preDelay);
+        addAndMakeVisible(preDelay);
     }
 }
 void ModulePanel::paint(juce::Graphics& g) {
@@ -102,13 +112,16 @@ void ModulePanel::paint(juce::Graphics& g) {
     if (kind != 0)
         text(g, primaryLabel.toUpperCase(), {20, 101, 226, 20}, 12.0f, ink, juce::Font::bold, juce::Justification::centred);
     if (kind == 0) {
-        text(g, primaryLabel.toUpperCase(), {12, 105, 118, 18}, 11.0f, ink, juce::Font::bold, juce::Justification::centred);
-        text(g, "SATURATION MIX", {138, 105, 112, 18}, 10.0f, ink, juce::Font::bold, juce::Justification::centred);
-        text(g, "DYNAMICS", {138, 164, 112, 18}, 10.0f, ink, juce::Font::bold, juce::Justification::centred);
-        text(g, secondaryLabel.toUpperCase(), {12, 295, 112, 18}, 10.0f, ink, juce::Font::bold, juce::Justification::centred);
-        text(g, "SATURATION FOCUS", {138, 223, 112, 18}, 9.0f, ink, juce::Font::bold, juce::Justification::centred);
-        g.setFont(juce::FontOptions(10.0f)); g.setColour(juce::Colour(0xffa3afaf));
-        g.drawFittedText(hint, {138, 285, 112, 44}, juce::Justification::topLeft, 3);
+        text(g, primaryLabel.toUpperCase(), {8, 102, 120, 18}, 11.0f, ink, juce::Font::bold, juce::Justification::centred);
+        text(g, "SATURATION MIX", {130, 102, 122, 18}, 10.0f, ink, juce::Font::bold, juce::Justification::centred);
+        text(g, "DYNAMICS", {130, 162, 122, 18}, 10.0f, ink, juce::Font::bold, juce::Justification::centred);
+        text(g, secondaryLabel.toUpperCase(), {8, 294, 116, 18}, 10.0f, ink, juce::Font::bold, juce::Justification::centred);
+        text(g, "SATURATION FOCUS", {130, 222, 122, 18}, 9.0f, ink, juce::Font::bold, juce::Justification::centred);
+        g.setFont(juce::FontOptions(10.5f)); g.setColour(juce::Colour(0xffa3afaf));
+        g.drawFittedText(hint, {130, 288, 122, 44}, juce::Justification::topLeft, 3);
+    } else if (kind == 1) {
+        text(g, secondaryLabel.toUpperCase(), {132, 304, 114, 18}, 11.0f, ink, juce::Font::bold);
+        text(g, "PRE-DELAY", {132, 326, 114, 16}, 10.0f, juce::Colour(0xffa3afaf), juce::Font::bold);
     } else {
         text(g, secondaryLabel.toUpperCase(), {132, 323, 114, 24}, 12.0f, ink, juce::Font::bold);
         g.setFont(juce::FontOptions(12.0f)); g.setColour(juce::Colour(0xffa3afaf));
@@ -149,14 +162,17 @@ void ModulePanel::paint(juce::Graphics& g) {
 void ModulePanel::resized() {
     bypass.setBounds(154, 20, 94, 36);
     if (kind == 0) {
-        primary.setBounds(4, 120, 132, 173);
+        primary.setBounds(4, 118, 126, 166);
         secondary.setBounds(10, 314, 108, 94);
-        saturationMix.setBounds(138, 124, 112, 36);
-        dynamics.setBounds(138, 183, 112, 36);
-        focus.setBounds(138, 246, 112, 36);
+        saturationMix.setBounds(130, 122, 122, 36);
+        dynamics.setBounds(130, 182, 122, 36);
+        focus.setBounds(130, 244, 122, 36);
     } else {
         primary.setBounds(44, 126, 178, 178);
         secondary.setBounds(20, 314, 100, 96);
+        if (kind == 1) {
+            preDelay.setBounds(130, 344, 122, 36);
+        }
     }
 }
 SausageEditor::SausageEditor(SausageProcessor& owner)
@@ -166,13 +182,20 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
       spacePanel(owner.parameters, "Space", "STEREO REVERB", "space", "Mix", "size", "Size", "spaceBypass", juce::Colour(0xff48f0c8), "Reverb mix. Size sets decay."),
       risePanel(owner.parameters, "Rise", "PITCH + BUILDUP", "rise", "Rise", "riseMix", "Mix", "riseBypass", juce::Colour(0xff48f0c8), "Pitch shift, up to an octave."),
       widthPanel(owner.parameters, "Width", "STEREO WIDENER", "width", "Width", "spread", "Spread", "widthBypass", juce::Colour(0xff48f0c8), "Stereo width and spacing."),
-      outputAttachment(owner.parameters, "output", output), bypassAttachment(owner.parameters, "bypass", bypass) {
+      outputAttachment(owner.parameters, "output", output), masterMixAttachment(owner.parameters, "masterMix", masterMix),
+      bypassAttachment(owner.parameters, "bypass", bypass), softClipAttachment(owner.parameters, "softClip", softClip) {
     setLookAndFeel(&look);
     grill = juce::Drawable::createFromImageData(BinaryData::grill_svg, BinaryData::grill_svgSize);
     for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) addAndMakeVisible(p);
     dial(output, "output", juce::Colour(0xffffbe3b));
     output.setTextValueSuffix(" dB"); output.setTooltip("Final output trim, after all four effects. Master bypass ignores trim.");
     output.setColour(juce::Slider::textBoxTextColourId, cream);
+    dial(masterMix, "masterMix", juce::Colour(0xff48f0c8));
+    masterMix.setDoubleClickReturnValue(true, 100.0);
+    masterMix.setTooltip("Global dry/wet parallel rack blend (0% dry to 100% wet).");
+    masterMix.setColour(juce::Slider::textBoxTextColourId, cream);
+    softClip.setComponentID("softClip"); softClip.setName("Soft Clip"); softClip.setClickingTogglesState(true);
+    softClip.setTooltip("Anti-aliased post-rack soft clipper ceiling so aggressive builds never exceed 0 dBFS.");
     bypass.setComponentID("bypass"); bypass.setName("Master bypass"); bypass.setClickingTogglesState(true);
     bypass.setTooltip("Bypass the complete chain, preserving the reported 16-sample latency.");
     recipes.setComponentID("recipes"); recipes.setTextWhenNothingSelected("CHOOSE A RECIPE");
@@ -210,7 +233,7 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     for (int i = 0; i < 4; ++i) algorithms.addItem(sausage::algorithmNames[i], i + 1);
     algorithms.setTooltip("One algorithm set for all four effects. Classic is the original set. Velvet uses atan and a hall. Punch uses clipping and a short room. Prism uses wavefolding and a brighter hall. Knob settings stay put.");
     algorithmAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(owner.parameters, "algorithm", algorithms);
-    addAndMakeVisible(output); addAndMakeVisible(bypass); addAndMakeVisible(recipes); addAndMakeVisible(algorithms);
+    addAndMakeVisible(output); addAndMakeVisible(masterMix); addAndMakeVisible(softClip); addAndMakeVisible(bypass); addAndMakeVisible(recipes); addAndMakeVisible(algorithms);
     addAndMakeVisible(prevRecipe); addAndMakeVisible(nextRecipe);
     setResizable(true, true);
     setResizeLimits(1160, 720, 1740, 1080);
@@ -244,7 +267,7 @@ void SausageEditor::paint(juce::Graphics& g) {
         grill->drawWithin(g, {101.0f-width*.5f, 8.0f - 3.0f*pulse, width, 145.0f},
                           juce::RectanglePlacement::centred, 1.0f);
     }
-    text(g, "openSausage", {186, 23, 650, 66}, 60.0f, ink, juce::Font::bold);
+    text(g, "openSausage", {186, 30, 480, 56}, 46.0f, ink, juce::Font::bold);
     text(g, "Saturation / Space / Pitch / Stereo", {190, 94, 330, 25}, 14.0f, ink, juce::Font::bold);
     text(g, "Algorithm", {532, 81, 145, 20}, 14.0f, ink, juce::Font::bold);
     text(g, "Recipe", {706, 81, 412, 20}, 14.0f, ink, juce::Font::bold);
@@ -252,10 +275,11 @@ void SausageEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xf00c1418)); g.fillRect(0, 609, 1160, 111);
     g.setColour(juce::Colour(0xff48f0c8).withAlpha(0.4f)); g.drawHorizontalLine(609, 24, 1136);
     meter(g, "INPUT", ownerProcessor.inputPeak.load(std::memory_order_relaxed), 30);
-    meter(g, "OUTPUT", ownerProcessor.outputPeak.load(std::memory_order_relaxed), 224);
-    text(g, "Output trim", {425, 638, 120, 22}, 14.0f, cream, juce::Font::bold);
-    text(g, "Compression", {687, 623, 174, 22}, 14.0f, cream, juce::Font::bold);
-    text(g, juce::String(ownerProcessor.gainReduction.load(std::memory_order_relaxed), 1) + " dB", {687, 646, 174, 28}, 22.0f, juce::Colour(0xffffbe3b), juce::Font::bold);
+    meter(g, "OUTPUT", ownerProcessor.outputPeak.load(std::memory_order_relaxed), 214);
+    text(g, "Output", {394, 638, 66, 22}, 13.0f, cream, juce::Font::bold);
+    text(g, "Rack mix", {562, 638, 74, 22}, 13.0f, cream, juce::Font::bold);
+    text(g, "Compression", {738, 623, 126, 22}, 13.0f, cream, juce::Font::bold);
+    text(g, juce::String(ownerProcessor.gainReduction.load(std::memory_order_relaxed), 1) + " dB", {738, 646, 126, 28}, 21.0f, juce::Colour(0xffffbe3b), juce::Font::bold);
     g.setColour(juce::Colour(0xff3b474a)); g.drawHorizontalLine(687, 24, 1136);
     text(g, "Signal flow: Sausage > Space > Rise > Width > Output", {30, 693, 760, 20}, 12.0f, juce::Colour(0xff869ca8));
     text(g, "4x saturation  /  v" JucePlugin_VersionString, {880, 693, 246, 20}, 12.0f, juce::Colour(0xff869ca8), juce::Font::plain, juce::Justification::centredRight);
@@ -267,12 +291,13 @@ void SausageEditor::paint(juce::Graphics& g) {
 void SausageEditor::resized() {
     sausagePanel.setBounds(24, 172, 266, 415); spacePanel.setBounds(306, 172, 266, 415);
     risePanel.setBounds(588, 172, 266, 415); widthPanel.setBounds(870, 172, 266, 415);
-    output.setBounds(548, 611, 108, 74); bypass.setBounds(934, 633, 192, 36);
+    output.setBounds(456, 611, 96, 74); masterMix.setBounds(632, 611, 96, 74);
+    softClip.setBounds(864, 633, 112, 36); bypass.setBounds(986, 633, 146, 36);
     prevRecipe.setBounds(706, 104, 74, 36);
     recipes.setBounds(786, 104, 236, 36);
     nextRecipe.setBounds(1028, 104, 90, 36);
     algorithms.setBounds(532, 104, 158, 36);
     const auto transform = juce::AffineTransform::scale(static_cast<float>(getWidth()) / 1160.0f);
-    std::ranges::for_each(std::initializer_list<juce::Component*> {&sausagePanel, &spacePanel, &risePanel, &widthPanel, &output, &bypass, &recipes, &algorithms, &prevRecipe, &nextRecipe},
+    std::ranges::for_each(std::initializer_list<juce::Component*> {&sausagePanel, &spacePanel, &risePanel, &widthPanel, &output, &masterMix, &softClip, &bypass, &recipes, &algorithms, &prevRecipe, &nextRecipe},
                           [transform](juce::Component* child) { child->setTransform(transform); });
 }

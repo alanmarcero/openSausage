@@ -4,7 +4,7 @@
 #include <utility>
 
 namespace {
-constexpr const char* ids[] {"fatness", "color", "space", "size", "rise", "riseMix", "width", "spread", "output", "sausageBypass", "spaceBypass", "riseBypass", "widthBypass", "bypass", "algorithm", "satMix", "satDynamics", "satFocus"};
+constexpr const char* ids[] {"fatness", "color", "space", "size", "rise", "riseMix", "width", "spread", "output", "sausageBypass", "spaceBypass", "riseBypass", "widthBypass", "bypass", "algorithm", "satMix", "satDynamics", "satFocus", "preDelay", "masterMix", "softClip"};
 juce::AudioProcessorValueTreeState::ParameterLayout layout() {
     juce::AudioProcessorValueTreeState::ParameterLayout result;
     const char* names[] {"Fatness", "Color", "Space Mix", "Space Size", "Rise Amount", "Rise Mix", "Width Amount", "Width Spread"};
@@ -19,6 +19,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout layout() {
     result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("satMix", 1), "Saturation Mix", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, juce::AudioParameterFloatAttributes().withLabel("%")));
     result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("satDynamics", 1), "Saturation Dynamics", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, juce::AudioParameterFloatAttributes().withLabel("%")));
     result.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("satFocus", 1), "Saturation Focus", juce::StringArray {"Neutral", "Keep Low", "Keep High"}, 0));
+    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("preDelay", 2), "Space Pre-Delay", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, juce::AudioParameterFloatAttributes().withLabel("ms")));
+    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("masterMix", 2), "Master Mix", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, juce::AudioParameterFloatAttributes().withLabel("%")));
+    result.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("softClip", 2), "Soft Clip", false));
     return result;
 }
 }
@@ -34,7 +37,8 @@ sausage::RackSettings SausageProcessor::settings(bool hostBypassed) const noexce
             value(4) / 100.0f, value(5) / 100.0f, value(6) / 100.0f, value(7) / 100.0f, value(8),
             value(9) < 0.5f, value(10) < 0.5f, value(11) < 0.5f, value(12) < 0.5f, hostBypassed || value(13) >= 0.5f,
             static_cast<sausage::Algorithm>(static_cast<int>(value(14))), value(15) / 100.0f, value(16) / 100.0f,
-            static_cast<sausage::SaturationFocus>(static_cast<int>(value(17)))};
+            static_cast<sausage::SaturationFocus>(static_cast<int>(value(17))),
+            value(18), value(19) / 100.0f, value(20) >= 0.5f};
 }
 void SausageProcessor::prepareToPlay(double sampleRate, int) { clockRate = sampleRate; rack.setSettings(settings()); rack.prepare(sampleRate); }
 void SausageProcessor::releaseResources() { rack.reset(); }
@@ -88,8 +92,9 @@ void SausageProcessor::setStateInformation(const void* data, int bytes) {
                 algorithm.setProperty("value", 0.0f, nullptr);
                 state.appendChild(algorithm, nullptr);
             }
-            for (const auto& [id, defaultValue] : std::array<std::pair<const char*, float>, 3>{{
-                     {"satMix", 100.0f}, {"satDynamics", 100.0f}, {"satFocus", 0.0f}}}) {
+            for (const auto& [id, defaultValue] : std::array<std::pair<const char*, float>, 6>{{
+                     {"satMix", 100.0f}, {"satDynamics", 100.0f}, {"satFocus", 0.0f},
+                     {"preDelay", 0.0f}, {"masterMix", 100.0f}, {"softClip", 0.0f}}}) {
                 if (!state.getChildWithProperty("id", id).isValid()) {
                     auto parameter = parameters.copyState().getChildWithProperty("id", id).createCopy();
                     parameter.setProperty("value", defaultValue, nullptr);
@@ -126,10 +131,11 @@ void SausageProcessor::applyRecipe(int index) {
         parameter->setValueNotifyingHost(parameter->convertTo0to1(i < 9 ? recipes[index][i] : 0.0f));
         parameter->endChangeGesture();
     }
-    for (std::size_t i = 15; i < 18; ++i) {
+    for (std::size_t i = 15; i < 21; ++i) {
         auto* parameter = parameters.getParameter(ids[i]);
         parameter->beginChangeGesture();
-        parameter->setValueNotifyingHost(parameter->convertTo0to1(i == 17 ? 0.0f : 100.0f));
+        const float def = (i == 15 || i == 16 || i == 19) ? 100.0f : 0.0f;
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(def));
         parameter->endChangeGesture();
     }
 }

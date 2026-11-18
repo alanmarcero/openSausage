@@ -13,6 +13,8 @@ struct RackSettings {
     Algorithm algorithm = Algorithm::Classic;
     float saturationMix = 1.0f, dynamics = 1.0f;
     SaturationFocus focus = SaturationFocus::Neutral;
+    float preDelayMs = 0.0f, masterMix = 1.0f;
+    bool softClip = false;
 };
 
 class RackEngine {
@@ -37,6 +39,7 @@ private:
     std::array<float, 8> damp {};
     std::array<std::array<Delay, 4>, 2> diffusers;
     std::array<Delay, 2> pitch, widen;
+    Delay spacePreDelay;
     std::array<std::array<float, Core::latency>, 2> dry {};
     double rate = 48000.0;
     float smoothing = 0.0f, phase = 0.0f, active = 1.0f;

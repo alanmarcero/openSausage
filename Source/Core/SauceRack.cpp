@@ -53,6 +53,9 @@ void RackEngine::setSettings(RackSettings settings) noexcept {
     target.focus = settings.focus >= SaturationFocus::Neutral && settings.focus <= SaturationFocus::KeepHigh
         ? settings.focus : SaturationFocus::Neutral;
     target.outputDb = std::isfinite(settings.outputDb) ? std::clamp(settings.outputDb, -24.0f, 12.0f) : 0.0f;
+    target.preDelayMs = std::isfinite(settings.preDelayMs) ? std::clamp(settings.preDelayMs, 0.0f, 100.0f) : 0.0f;
+    target.masterMix = unit(settings.masterMix);
+    target.softClip = settings.softClip;
     core.setSettings({target.fatness, target.color, 0.0f, !target.sausageOn, target.algorithm,
                       target.saturationMix, target.dynamics, target.focus});
 }
@@ -70,6 +73,7 @@ void RackEngine::prepare(double sampleRate) {
             diffusers[ch][i].resize(static_cast<std::size_t>((diffuserSamples[i] + 23.0 * static_cast<double>(ch)) * rate / 44100.0) + 1);
     for (auto& delay : pitch) delay.resize(static_cast<std::size_t>(rate * 0.08) + 4);
     for (auto& delay : widen) delay.resize(static_cast<std::size_t>(rate * 0.04) + 4);
+    spacePreDelay.resize(static_cast<std::size_t>(rate * 0.11) + 4);
     reset();
 }
 void RackEngine::reset() noexcept {
@@ -78,6 +82,7 @@ void RackEngine::reset() noexcept {
     for (auto& channel : diffusers) for (auto& delay : channel) delay.clear();
     for (auto& delay : pitch) delay.clear();
     for (auto& delay : widen) delay.clear();
+    spacePreDelay.clear();
     damp = {}; highpass = {}; previous = {}; dry = {};
     phase = 0.0f; dryPosition = 0;
     grainPhases = {0.0f, 0.25f, 0.5f, 0.75f};
@@ -106,12 +111,17 @@ void RackEngine::process(float* left, float* right, int samples) noexcept {
         smooth.width = follow(smooth.width, target.widthOn ? target.width : 0.0f, smoothing);
         smooth.spread = follow(smooth.spread, target.spread, smoothing);
         smooth.outputDb = follow(smooth.outputDb, target.outputDb, smoothing);
+        smooth.preDelayMs = follow(smooth.preDelayMs, target.preDelayMs, smoothing);
+        smooth.masterMix = follow(smooth.masterMix, target.masterMix, smoothing);
         active = follow(active, target.bypass ? 0.0f : 1.0f, smoothing);
 
         if (smooth.space > 0.0f) {
             spaceCleared = false;
             float wet[] {0.0f, 0.0f};
-            const auto mid = (l + r) * 0.5f;
+            const auto rawMid = (l + r) * 0.5f;
+            spacePreDelay.write(rawMid);
+            const auto preDelaySamples = static_cast<float>(rate) * smooth.preDelayMs * 0.001f;
+            const auto mid = preDelaySamples >= 1.0f ? spacePreDelay.read(preDelaySamples) : rawMid;
             const auto mode = target.algorithm;
             std::array<float, 8> echoes {}, feedbackSignal {};
             const auto damping = mode == Algorithm::Velvet ? 0.6f : mode == Algorithm::Prism ? 0.2f : 0.35f;
@@ -154,6 +164,7 @@ void RackEngine::process(float* left, float* right, int samples) noexcept {
         } else if (!spaceCleared) {
             for (auto& delay : combs) delay.clear();
             for (auto& channel : diffusers) for (auto& delay : channel) delay.clear();
+            spacePreDelay.clear();
             damp = {}; spaceCleared = true;
         }
 
@@ -250,8 +261,16 @@ void RackEngine::process(float* left, float* right, int samples) noexcept {
             widthCleared = true;
         }
         const auto gain = std::pow(10.0f, smooth.outputDb / 20.0f);
-        left[i] = active == 0.0f ? delayed[0] : delayed[0] + active * (l * gain - delayed[0]);
-        if (right) right[i] = active == 0.0f ? delayed[1] : delayed[1] + active * (r * gain - delayed[1]);
+        float wetOutL = l * gain;
+        float wetOutR = r * gain;
+        if (target.softClip) {
+            wetOutL = std::tanh(wetOutL);
+            wetOutR = std::tanh(wetOutR);
+        }
+        const float mixedL = delayed[0] + smooth.masterMix * (wetOutL - delayed[0]);
+        const float mixedR = delayed[1] + smooth.masterMix * (wetOutR - delayed[1]);
+        left[i] = active == 0.0f ? delayed[0] : delayed[0] + active * (mixedL - delayed[0]);
+        if (right) right[i] = active == 0.0f ? delayed[1] : delayed[1] + active * (mixedR - delayed[1]);
     }
 }
 
