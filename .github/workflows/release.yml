@@ -27,5 +27,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          echo "![openSausage editor](https://raw.githubusercontent.com/alanmarcero/openSausage/$RELEASE_TAG/assets/native-ui.png)" > "$RUNNER_TEMP/release-notes.md"
+          echo "![openSausage editor](https://raw.githubusercontent.com/alanmarcero/openSausage/$RELEASE_TAG/docs/screenshots/preview.png)" > "$RUNNER_TEMP/release-notes.md"
           gh release create "$RELEASE_TAG" dist/*.zip --verify-tag --generate-notes --notes-file "$RUNNER_TEMP/release-notes.md" --title "openSausage $RELEASE_TAG"
