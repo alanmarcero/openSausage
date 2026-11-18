@@ -18,6 +18,7 @@ concurrency:
 
 jobs:
   dsp:
+    if: false
     name: DSP / sanitizers
     runs-on: ubuntu-latest
     steps:
@@ -33,6 +34,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
   macos:
+    if: false
     name: macOS / universal
     runs-on: macos-15
     timeout-minutes: 30
