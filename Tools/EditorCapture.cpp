@@ -186,6 +186,8 @@ int main(int argc, char** argv) {
         }
         auto* recipes = dynamic_cast<juce::ComboBox*>(find(*editor, "recipes"));
         require(recipes != nullptr, "Recipe selector missing");
+        require(recipes->getNumItems() == 48, "Expected 48 factory recipes");
+        require(recipes->getRootMenu()->getNumItems() == 7, "Expected 7 dance-style recipe submenus");
         recipes->setSelectedId(5, juce::sendNotificationSync);
         require(processor.parameters.getRawParameterValue("rise")->load() == 85.0f, "Recipe did not reach processor");
         for (const auto* id : {"spaceBypass", "widthBypass"})
