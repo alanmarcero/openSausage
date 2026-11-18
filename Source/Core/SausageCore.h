@@ -30,7 +30,9 @@ private:
     struct Fir {
         std::array<float, 65> history {};
         int position = 0;
+        void push(float input) noexcept;
         float tick(float input, const std::array<float, 65>& taps) noexcept;
+        float tickUpsampleZeroStuffed(float input, int sub, const std::array<float, 65>& taps) noexcept;
     };
     struct Channel {
         Fir up, down;
