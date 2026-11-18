@@ -2,7 +2,7 @@
 
 A four-part effect plugin for adding saturation, reverb, rising pitch, and stereo width to a track or bus.
 
-![openSausage editor](assets/native-ui.png)
+![openSausage editor](docs/screenshots/preview.png)
 
 [Download the latest release](https://github.com/alanmarcero/openSausage/releases/latest) · [Install with OpenVST Manager](https://github.com/alanmarcero/alan-m-OpenVSTManager/releases/latest)
 
