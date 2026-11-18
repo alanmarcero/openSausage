@@ -54,26 +54,44 @@ int main(int argc, char** argv) {
         auto* saturationMix = dynamic_cast<juce::Slider*>(find(*editor, "satMix"));
         auto* dynamics = dynamic_cast<juce::Slider*>(find(*editor, "satDynamics"));
         auto* focus = dynamic_cast<juce::ComboBox*>(find(*editor, "satFocus"));
-        require(saturationMix && dynamics && focus, "New saturation controls missing from the native editor");
+        auto* preDelay = dynamic_cast<juce::Slider*>(find(*editor, "preDelay"));
+        auto* masterMix = dynamic_cast<juce::Slider*>(find(*editor, "masterMix"));
+        auto* softClip = dynamic_cast<juce::TextButton*>(find(*editor, "softClip"));
+        require(saturationMix && dynamics && focus && preDelay && masterMix && softClip, "New controls missing from the native editor");
         require(processor.parameters.getRawParameterValue("satMix")->load() == 100.0f
                     && processor.parameters.getRawParameterValue("satDynamics")->load() == 100.0f
-                    && processor.parameters.getRawParameterValue("satFocus")->load() == 0.0f,
-                "New saturation controls have compatibility defaults");
+                    && processor.parameters.getRawParameterValue("satFocus")->load() == 0.0f
+                    && processor.parameters.getRawParameterValue("preDelay")->load() == 0.0f
+                    && processor.parameters.getRawParameterValue("masterMix")->load() == 100.0f
+                    && processor.parameters.getRawParameterValue("softClip")->load() == 0.0f,
+                "New controls have compatibility defaults");
         saturationMix->setValue(42.0, juce::sendNotificationSync);
         dynamics->setValue(37.0, juce::sendNotificationSync);
         focus->setSelectedId(2, juce::sendNotificationSync);
+        preDelay->setValue(25.0, juce::sendNotificationSync);
+        masterMix->setValue(80.0, juce::sendNotificationSync);
+        softClip->setToggleState(true, juce::sendNotificationSync);
         require(processor.parameters.getRawParameterValue("satMix")->load() == 42.0f
                     && processor.parameters.getRawParameterValue("satDynamics")->load() == 37.0f
-                    && processor.parameters.getRawParameterValue("satFocus")->load() == 1.0f,
-                "Saturation controls are attached to host parameters");
+                    && processor.parameters.getRawParameterValue("satFocus")->load() == 1.0f
+                    && processor.parameters.getRawParameterValue("preDelay")->load() == 25.0f
+                    && processor.parameters.getRawParameterValue("masterMix")->load() == 80.0f
+                    && processor.parameters.getRawParameterValue("softClip")->load() == 1.0f,
+                "Controls are attached to host parameters");
         juce::MemoryBlock featureState;
         processor.getStateInformation(featureState);
         SausageProcessor featureRestored;
         featureRestored.setStateInformation(featureState.getData(), static_cast<int>(featureState.getSize()));
         require(featureRestored.parameters.getRawParameterValue("satMix")->load() == 42.0f
                     && featureRestored.parameters.getRawParameterValue("satDynamics")->load() == 37.0f
-                    && featureRestored.parameters.getRawParameterValue("satFocus")->load() == 1.0f,
-                "Saturation controls survive session recall");
+                    && featureRestored.parameters.getRawParameterValue("satFocus")->load() == 1.0f
+                    && featureRestored.parameters.getRawParameterValue("preDelay")->load() == 25.0f
+                    && featureRestored.parameters.getRawParameterValue("masterMix")->load() == 80.0f
+                    && featureRestored.parameters.getRawParameterValue("softClip")->load() == 1.0f,
+                "Controls survive session recall");
+        preDelay->setValue(0.0, juce::sendNotificationSync);
+        masterMix->setValue(100.0, juce::sendNotificationSync);
+        softClip->setToggleState(false, juce::sendNotificationSync);
         save(*editor, output, "openSausage-clean.png");
         auto* algorithms = dynamic_cast<juce::ComboBox*>(find(*editor, "algorithm"));
         require(algorithms != nullptr && algorithms->getNumItems() == 4, "Four global algorithms missing");
@@ -123,18 +141,25 @@ int main(int argc, char** argv) {
         auto legacy = processor.parameters.copyState();
         for (int i = legacy.getNumChildren(); --i >= 0;)
             if (const auto id = legacy.getChild(i).getProperty("id").toString();
-                id == "algorithm" || id == "satMix" || id == "satDynamics" || id == "satFocus") legacy.removeChild(i, nullptr);
+                id == "algorithm" || id == "satMix" || id == "satDynamics" || id == "satFocus"
+                || id == "preDelay" || id == "masterMix" || id == "softClip") legacy.removeChild(i, nullptr);
         juce::MemoryBlock legacyData;
         juce::AudioProcessor::copyXmlToBinary(*legacy.createXml(), legacyData);
         saturationMix->setValue(12.0, juce::sendNotificationSync);
         dynamics->setValue(24.0, juce::sendNotificationSync);
         focus->setSelectedId(3, juce::sendNotificationSync);
+        preDelay->setValue(45.0, juce::sendNotificationSync);
+        masterMix->setValue(50.0, juce::sendNotificationSync);
+        softClip->setToggleState(true, juce::sendNotificationSync);
         processor.setStateInformation(legacyData.getData(), static_cast<int>(legacyData.getSize()));
         require(processor.parameters.getRawParameterValue("algorithm")->load() == 0.0f, "Legacy session did not select Classic");
         require(processor.parameters.getRawParameterValue("satMix")->load() == 100.0f
                     && processor.parameters.getRawParameterValue("satDynamics")->load() == 100.0f
-                    && processor.parameters.getRawParameterValue("satFocus")->load() == 0.0f,
-                "Legacy session did not supply saturation defaults");
+                    && processor.parameters.getRawParameterValue("satFocus")->load() == 0.0f
+                    && processor.parameters.getRawParameterValue("preDelay")->load() == 0.0f
+                    && processor.parameters.getRawParameterValue("masterMix")->load() == 100.0f
+                    && processor.parameters.getRawParameterValue("softClip")->load() == 0.0f,
+                "Legacy session did not supply defaults");
         require(algorithms->getSelectedId() == 1, "Legacy session did not update selector");
         algorithmParameter->setValueNotifyingHost(1.0f);
         require(algorithms->getSelectedId() == 4, "Host automation did not update selector");
