@@ -6,6 +6,10 @@ A four-part effect plugin for adding saturation, reverb, rising pitch, and stere
 
 [Download the latest release](https://github.com/alanmarcero/openSausage/releases/latest) · [Install with OpenVST Manager](https://github.com/alanmarcero/alan-m-OpenVSTManager/releases/latest)
 
+## Beta
+
+All of these plugins are in beta. The macOS and Linux builds are not up to date, so the Windows build is the one to use for now. A plugin can change dramatically from one release to the next, but the goal is for each one to keep getting better.
+
 ## Effects
 
 The sections run in this order: Sausage, Space, Rise, and Width.
