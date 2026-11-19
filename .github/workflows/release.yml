@@ -9,6 +9,10 @@ permissions:
 
 jobs:
   build:
+    # update-preview in the called workflow declares contents: write. GitHub
+    # checks that at startup, before the job if, so this caller must grant it.
+    permissions:
+      contents: write
     uses: ./.github/workflows/build.yml
   publish:
     needs: build
@@ -27,5 +31,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          echo "![openSausage editor](https://raw.githubusercontent.com/alanmarcero/openSausage/$RELEASE_TAG/docs/screenshots/preview.png)" > "$RUNNER_TEMP/release-notes.md"
+          {
+            cat docs/release-notes.md
+            echo
+            echo "![openSausage editor](https://raw.githubusercontent.com/alanmarcero/openSausage/$RELEASE_TAG/docs/screenshots/preview.png)"
+          } > "$RUNNER_TEMP/release-notes.md"
           gh release create "$RELEASE_TAG" dist/*.zip --verify-tag --generate-notes --notes-file "$RUNNER_TEMP/release-notes.md" --title "openSausage $RELEASE_TAG"
