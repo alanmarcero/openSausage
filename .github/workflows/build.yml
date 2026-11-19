@@ -139,7 +139,8 @@ jobs:
           path: preview
       - name: Commit refreshed preview if changed
         run: |
-          git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" | grep -qE '^(Source|assets|Tools|tools|Tests)/' || { echo "No UI changes; keeping preview."; exit 0; }
+          # The version painted in the editor comes from CMakeLists.txt (JucePlugin_VersionString).
+          git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" | grep -qE '^(Source|assets|Tools|tools|Tests)/|^CMakeLists\.txt$' || { echo "No UI changes; keeping preview."; exit 0; }
           mkdir -p docs/screenshots
           cp "preview/openSausage-clean.png" docs/screenshots/preview.png
           if git diff --quiet -- docs/screenshots/preview.png; then echo "Preview unchanged."; exit 0; fi
