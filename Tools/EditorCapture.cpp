@@ -71,6 +71,8 @@ int main(int argc, char** argv) {
         require(find(*editor, "suiteUndo") && find(*editor, "suiteRedo") && find(*editor, "suiteA")
                     && find(*editor, "suiteB") && find(*editor, "presetSearch") && find(*editor, "presetBrowser"),
                 "Undo, A/B, or preset browser missing");
+        require(editor->getWidth() == 1289 && editor->getHeight() == 800, "Editor left its default size");
+        save(*editor, output, "openSausage-clean.png");
         saturationMix->setValue(42.0, juce::sendNotificationSync);
         dynamics->setValue(37.0, juce::sendNotificationSync);
         focus->setSelectedId(2, juce::sendNotificationSync);
@@ -98,7 +100,6 @@ int main(int argc, char** argv) {
         preDelay->setValue(0.0, juce::sendNotificationSync);
         masterMix->setValue(100.0, juce::sendNotificationSync);
         softClip->setToggleState(false, juce::sendNotificationSync);
-        save(*editor, output, "openSausage-clean.png");
         auto* algorithms = dynamic_cast<juce::ComboBox*>(find(*editor, "algorithm"));
         require(algorithms != nullptr && algorithms->getNumItems() == 4, "Four global algorithms missing");
         auto* algorithmParameter = processor.parameters.getParameter("algorithm");
