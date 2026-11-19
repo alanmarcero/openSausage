@@ -62,6 +62,12 @@ void RackEngine::setSettings(RackSettings settings) noexcept {
     target.preDelayMs = std::isfinite(settings.preDelayMs) ? std::clamp(settings.preDelayMs, 0.0f, 100.0f) : 0.0f;
     target.masterMix = unit(settings.masterMix);
     target.softClip = settings.softClip;
+    target.riseBars = settings.riseBars > 0 ? settings.riseBars : 0;
+    target.risePpq = std::isfinite(settings.risePpq) ? settings.risePpq : 0.0;
+    target.riseTempo = std::isfinite(settings.riseTempo) && settings.riseTempo > 0.0 ? settings.riseTempo : 120.0;
+    target.riseQuartersPerBar = std::isfinite(settings.riseQuartersPerBar) && settings.riseQuartersPerBar > 0.0
+        ? settings.riseQuartersPerBar : 4.0;
+    target.riseRunning = settings.riseRunning;
     core.setSettings({target.fatness, target.color, 0.0f, !target.sausageOn, target.algorithm,
                       target.saturationMix, target.dynamics, target.focus});
 }
@@ -180,7 +186,9 @@ void RackEngine::process(float* left, float* right, int samples) noexcept {
             const auto mode = target.algorithm;
             const auto windowSeconds = mode == Algorithm::Velvet ? 0.065 : mode == Algorithm::Punch ? 0.02 : 0.05;
             const auto window = static_cast<float>(rate * windowSeconds);
-            const auto ratio = std::pow(2.0f, smooth.rise);
+            const auto amount = syncedRise(smooth.rise, target.riseBars,
+                riseSamplePpq(target.risePpq, i, target.riseTempo, rate, target.riseRunning), target.riseQuartersPerBar);
+            const auto ratio = std::pow(2.0f, amount);
             phase += (ratio - 1.0f) / window;
             phase -= std::floor(phase);
             const float inputs[] {l, r};
@@ -191,7 +199,7 @@ void RackEngine::process(float* left, float* right, int samples) noexcept {
                     grainPhases[head] += (ratio - 1.0f) / (window * (1.0f + 0.06f * static_cast<float>(head)));
                     grainPhases[head] -= std::floor(grainPhases[head]);
                 }
-            const auto hpPole = static_cast<float>(std::exp(-2.0 * std::numbers::pi * (20.0 + 600.0 * smooth.rise) / rate));
+            const auto hpPole = static_cast<float>(std::exp(-2.0 * std::numbers::pi * (20.0 + 600.0 * amount) / rate));
             for (std::size_t ch = 0; ch < 2; ++ch) {
                 if (mode == Algorithm::Classic) {
                     const auto second = std::fmod(phase + 0.5f, 1.0f);
@@ -215,7 +223,7 @@ void RackEngine::process(float* left, float* right, int samples) noexcept {
             }
             const auto feedback = mode == Algorithm::Velvet ? 0.16f : mode == Algorithm::Punch ? 0.1f : 0.25f;
             for (std::size_t ch = 0; ch < 2; ++ch) {
-                pitch[ch].write(inputs[ch] + shifted[mode == Algorithm::Prism ? 1 - ch : ch] * smooth.rise * feedback);
+                pitch[ch].write(inputs[ch] + shifted[mode == Algorithm::Prism ? 1 - ch : ch] * amount * feedback);
                 highpass[ch] = shifted[ch] - previous[ch] + hpPole * highpass[ch];
                 previous[ch] = shifted[ch];
                 (ch == 0 ? l : r) += smooth.riseMix * (highpass[ch] - inputs[ch]);

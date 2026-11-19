@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(openSausage VERSION 1.9.0 LANGUAGES C CXX)
+project(openSausage VERSION 1.10.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(MSVC)
@@ -40,14 +40,18 @@ if(OS_BUILD_PLUGIN)
     target_sources(openSausage PRIVATE
         Source/Plugin/PluginProcessor.cpp
         Source/Plugin/PluginEditor.cpp
-        Source/Plugin/SausageLookAndFeel.cpp)
-    target_include_directories(openSausage PUBLIC Source/Plugin)
+        Source/Plugin/SausageLookAndFeel.cpp
+        Source/suite/ParameterUndo.cpp
+        Source/suite/ABCompare.cpp
+        Source/suite/PresetLibrary.cpp
+        Source/suite/SuiteBar.cpp)
+    target_include_directories(openSausage PUBLIC Source/Plugin Source/suite)
     target_compile_definitions(openSausage PUBLIC
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
     target_link_libraries(openSausage PRIVATE sausage_core SausageAssets
         juce::juce_audio_utils
         PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
-    add_executable(sausage_editor_capture Tools/EditorCapture.cpp)
+    add_executable(sausage_editor_capture Tools/EditorCapture.cpp Tests/SuiteTests.cpp)
     set_target_properties(sausage_editor_capture PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/sausage_editor_capture_artefacts/$<CONFIG>")
     target_link_libraries(sausage_editor_capture PRIVATE openSausage sausage_core SausageAssets juce::juce_audio_utils)

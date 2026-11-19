@@ -2,10 +2,11 @@
 #include "PluginEditor.h"
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <utility>
 
 namespace {
-constexpr const char* ids[] {"fatness", "color", "space", "size", "rise", "riseMix", "width", "spread", "output", "sausageBypass", "spaceBypass", "riseBypass", "widthBypass", "bypass", "algorithm", "satMix", "satDynamics", "satFocus", "preDelay", "masterMix", "softClip"};
+constexpr const char* ids[] {"fatness", "color", "space", "size", "rise", "riseMix", "width", "spread", "output", "sausageBypass", "spaceBypass", "riseBypass", "widthBypass", "bypass", "algorithm", "satMix", "satDynamics", "satFocus", "preDelay", "masterMix", "softClip", "riseLength"};
 juce::AudioProcessorValueTreeState::ParameterLayout layout() {
     juce::AudioProcessorValueTreeState::ParameterLayout result;
     const char* names[] {"Fatness", "Color", "Space Mix", "Space Size", "Rise Amount", "Rise Mix", "Width Amount", "Width Spread"};
@@ -23,23 +24,38 @@ juce::AudioProcessorValueTreeState::ParameterLayout layout() {
     result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("preDelay", 2), "Space Pre-Delay", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, juce::AudioParameterFloatAttributes().withLabel("ms")));
     result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("masterMix", 2), "Master Mix", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, juce::AudioParameterFloatAttributes().withLabel("%")));
     result.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("softClip", 2), "Soft Clip", false));
+    result.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("riseLength", 1), "Rise Length",
+        juce::StringArray {"Free", "1 Bar", "2 Bars", "4 Bars", "8 Bars", "16 Bars"}, 0));
     return result;
+}
+std::vector<juce::String> recipeNames() {
+    std::vector<juce::String> names;
+    for (const auto& recipe : SausageProcessor::factoryRecipes()) names.emplace_back(recipe.name);
+    return names;
 }
 }
 SausageProcessor::SausageProcessor()
     : AudioProcessor(BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true).withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      parameters(*this, nullptr, "openSausageState", layout()) {
+      parameters(*this, nullptr, "openSausageState", layout()),
+      history(*this), compare(parameters, history),
+      presets(PresetLibrary::userDirectory("openSausage"), recipeNames()) {
+    static_assert(std::size(ids) == parameterCount);
     for (std::size_t i = 0; i < values.size(); ++i) values[i] = parameters.getRawParameterValue(ids[i]);
     setLatencySamples(sausage::Core::latency);
 }
 sausage::RackSettings SausageProcessor::settings(bool hostBypassed) const noexcept {
     auto value = [this](std::size_t i) { return values[i]->load(std::memory_order_relaxed); };
-    return {value(0) / 100.0f, value(1) / 100.0f, value(2) / 100.0f, value(3) / 100.0f,
+    auto config = sausage::RackSettings {value(0) / 100.0f, value(1) / 100.0f, value(2) / 100.0f, value(3) / 100.0f,
             value(4) / 100.0f, value(5) / 100.0f, value(6) / 100.0f, value(7) / 100.0f, value(8),
             value(9) < 0.5f, value(10) < 0.5f, value(11) < 0.5f, value(12) < 0.5f, hostBypassed || value(13) >= 0.5f,
             static_cast<sausage::Algorithm>(static_cast<int>(value(14))), value(15) / 100.0f, value(16) / 100.0f,
             static_cast<sausage::SaturationFocus>(static_cast<int>(value(17))),
             value(18), value(19) / 100.0f, value(20) >= 0.5f};
+    constexpr int bars[] {0, 1, 2, 4, 8, 16};
+    const float rawLength = value(21);
+    const int rounded = std::isfinite(rawLength) ? static_cast<int>(std::lround(rawLength)) : 0;
+    config.riseBars = bars[static_cast<std::size_t>(std::clamp(rounded, 0, 5))];
+    return config;
 }
 void SausageProcessor::prepareToPlay(double sampleRate, int) { clockRate = sampleRate; rack.setSettings(settings()); rack.prepare(sampleRate); }
 void SausageProcessor::releaseResources() { rack.reset(); }
@@ -47,29 +63,39 @@ bool SausageProcessor::isBusesLayoutSupported(const BusesLayout& buses) const {
     const auto input = buses.getMainInputChannelSet();
     return (input == juce::AudioChannelSet::mono() || input == juce::AudioChannelSet::stereo()) && input == buses.getMainOutputChannelSet();
 }
-void SausageProcessor::updateBeatClock(int samples) {
-    double tempo = 120.0;
-    bool running = true;
-    if (auto* host = getPlayHead(); host && wrapperType != wrapperType_Standalone) {
+SausageProcessor::MusicalClock SausageProcessor::readClock(int samples) {
+    MusicalClock clock;
+    clock.ppq = visualQuarter;
+    if (auto* host = getPlayHead(); host != nullptr && wrapperType != wrapperType_Standalone) {
         if (auto position = host->getPosition()) {
-            running = position->getIsPlaying();
-            if (const auto bpm = position->getBpm(); bpm && std::isfinite(*bpm) && *bpm > 0) tempo = *bpm;
-            if (const auto ppq = position->getPpqPosition(); ppq && std::isfinite(*ppq)) visualQuarter = *ppq;
-            else if (const auto seconds = position->getTimeInSeconds(); seconds && std::isfinite(*seconds)) visualQuarter = *seconds * tempo / 60.0;
+            clock.running = position->getIsPlaying();
+            if (const auto bpm = position->getBpm(); bpm && std::isfinite(*bpm) && *bpm > 0) clock.tempo = *bpm;
+            if (const auto signature = position->getTimeSignature(); signature && signature->numerator > 0 && signature->denominator > 0)
+                clock.quartersPerBar = signature->numerator * (4.0 / signature->denominator);
+            if (const auto ppq = position->getPpqPosition(); ppq && std::isfinite(*ppq)) clock.ppq = *ppq;
+            else if (const auto seconds = position->getTimeInSeconds(); seconds && std::isfinite(*seconds))
+                clock.ppq = *seconds * clock.tempo / 60.0;
         }
     }
-    if (running && clockRate > 0) visualQuarter += samples * tempo / (60.0 * clockRate);
-    beatPhase.store(static_cast<float>(visualQuarter-std::floor(visualQuarter)), std::memory_order_relaxed);
+    const double advance = clock.running && clockRate > 0 ? samples * clock.tempo / (60.0 * clockRate) : 0.0;
+    visualQuarter = clock.ppq + advance;
+    beatPhase.store(static_cast<float>(visualQuarter - std::floor(visualQuarter)), std::memory_order_relaxed);
+    return clock;
 }
 
 void SausageProcessor::process(juce::AudioBuffer<float>& buffer, bool hostBypassed) {
     juce::ScopedNoDenormals noDenormals;
-    updateBeatClock(buffer.getNumSamples());
+    const auto clock = readClock(buffer.getNumSamples());
     for (int channel = getTotalNumInputChannels(); channel < buffer.getNumChannels(); ++channel) buffer.clear(channel, 0, buffer.getNumSamples());
     if (buffer.getNumSamples() == 0 || getTotalNumInputChannels() == 0) return;
     float input = 0.0f;
     for (int channel = 0; channel < getTotalNumInputChannels(); ++channel) input = juce::jmax(input, buffer.getMagnitude(channel, 0, buffer.getNumSamples()));
-    rack.setSettings(settings(hostBypassed));
+    auto config = settings(hostBypassed);
+    config.risePpq = clock.ppq;
+    config.riseTempo = clock.tempo;
+    config.riseQuartersPerBar = clock.quartersPerBar;
+    config.riseRunning = clock.running;
+    rack.setSettings(config);
     rack.process(buffer.getWritePointer(0), getTotalNumInputChannels() > 1 ? buffer.getWritePointer(1) : nullptr, buffer.getNumSamples());
     float output = 0.0f;
     for (int channel = 0; channel < getTotalNumInputChannels(); ++channel) output = juce::jmax(output, buffer.getMagnitude(channel, 0, buffer.getNumSamples()));
@@ -81,21 +107,41 @@ void SausageProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
 void SausageProcessor::processBlockBypassed(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) { process(buffer, true); }
 juce::AudioProcessorParameter* SausageProcessor::getBypassParameter() const { return parameters.getParameter("bypass"); }
 juce::AudioProcessorEditor* SausageProcessor::createEditor() { return new SausageEditor(*this); }
+int SausageProcessor::getNumPrograms() { return static_cast<int>(factoryRecipes().size()); }
+void SausageProcessor::setCurrentProgram(int index) {
+    if (index < 0 || index >= getNumPrograms()) return;
+    applyRecipe(index);
+    updateHostDisplay();
+}
+const juce::String SausageProcessor::getProgramName(int index) {
+    const auto& recipes = factoryRecipes();
+    if (index < 0 || index >= static_cast<int>(recipes.size())) return {};
+    return recipes[static_cast<std::size_t>(index)].name;
+}
 void SausageProcessor::getStateInformation(juce::MemoryBlock& destination) {
-    if (const auto xml = parameters.copyState().createXml()) copyXmlToBinary(*xml, destination);
+    auto state = parameters.copyState();
+    state.setProperty("program", currentProgram, nullptr);
+    compare.write(state);
+    if (const auto xml = state.createXml()) copyXmlToBinary(*xml, destination);
 }
 void SausageProcessor::setStateInformation(const void* data, int bytes) {
     if (const auto xml = getXmlFromBinary(data, bytes))
         if (xml->hasTagName(parameters.state.getType())) {
+            const ParameterUndo::Suspend guard(history);
             auto state = juce::ValueTree::fromXml(*xml);
+            const int program = static_cast<int>(state.getProperty("program", 0));
+            const int slot = static_cast<int>(state.getProperty("ab", 0));
+            auto inactive = state.getChildWithName("inactiveSlot").createCopy();
+            if (auto child = state.getChildWithName("inactiveSlot"); child.isValid()) state.removeChild(child, nullptr);
             if (!state.getChildWithProperty("id", "algorithm").isValid()) {
                 auto algorithm = parameters.copyState().getChildWithProperty("id", "algorithm").createCopy();
                 algorithm.setProperty("value", 0.0f, nullptr);
                 state.appendChild(algorithm, nullptr);
             }
-            for (const auto& [id, defaultValue] : std::array<std::pair<const char*, float>, 6>{{
+            for (const auto& [id, defaultValue] : std::array<std::pair<const char*, float>, 7>{{
                      {"satMix", 100.0f}, {"satDynamics", 100.0f}, {"satFocus", 0.0f},
-                     {"preDelay", 0.0f}, {"masterMix", 100.0f}, {"softClip", 0.0f}}}) {
+                     {"preDelay", 0.0f}, {"masterMix", 100.0f}, {"softClip", 0.0f},
+                     {"riseLength", 0.0f}}}) {
                 if (!state.getChildWithProperty("id", id).isValid()) {
                     auto parameter = parameters.copyState().getChildWithProperty("id", id).createCopy();
                     parameter.setProperty("value", defaultValue, nullptr);
@@ -103,8 +149,25 @@ void SausageProcessor::setStateInformation(const void* data, int bytes) {
                 }
             }
             parameters.replaceState(state);
+            currentProgram = program >= 0 && program < getNumPrograms() ? program : 0;
+            compare.install(slot, inactive);
+            history.clear();
         }
 }
+void SausageProcessor::loadParameterTree(const juce::ValueTree& tree) {
+    const bool grouped = history.beginGroup("Preset");
+    for (int index = 0; index < tree.getNumChildren(); ++index) {
+        const auto child = tree.getChild(index);
+        auto* parameter = parameters.getParameter(child.getProperty("id").toString());
+        if (parameter == nullptr) continue;
+        const float denormalised = child.getProperty("value");
+        parameter->beginChangeGesture();
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(denormalised));
+        parameter->endChangeGesture();
+    }
+    if (grouped) history.endGroup();
+}
+juce::ValueTree SausageProcessor::copyParameterTree() { return parameters.copyState(); }
 const std::vector<SausageRecipe>& SausageProcessor::factoryRecipes() {
     static const std::vector<SausageRecipe> recipes{
         // Uplifting (12) — indices 0, 3, 4 preserve EditorCapture test invariants
@@ -174,6 +237,8 @@ const std::vector<SausageRecipe>& SausageProcessor::factoryRecipes() {
 void SausageProcessor::applyRecipe(int index) {
     const auto& recipes = factoryRecipes();
     if (index < 0 || index >= static_cast<int>(recipes.size())) return;
+    currentProgram = index;
+    const bool grouped = history.beginGroup("Recipe");
     const auto& r = recipes[static_cast<std::size_t>(index)];
     const std::array<std::pair<std::size_t, float>, 20> targetValues{{
         {0, r.fatness}, {1, r.color}, {2, r.space}, {3, r.size}, {4, r.rise},
@@ -189,5 +254,6 @@ void SausageProcessor::applyRecipe(int index) {
         parameter->setValueNotifyingHost(parameter->convertTo0to1(entry.second));
         parameter->endChangeGesture();
     });
+    if (grouped) history.endGroup();
 }
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new SausageProcessor(); }

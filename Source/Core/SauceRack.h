@@ -1,5 +1,7 @@
 #pragma once
 #include "SausageCore.h"
+#include <algorithm>
+#include <cmath>
 #include <vector>
 
 namespace sausage {
@@ -15,7 +17,27 @@ struct RackSettings {
     SaturationFocus focus = SaturationFocus::Neutral;
     float preDelayMs = 0.0f, masterMix = 1.0f;
     bool softClip = false;
+    // 0 keeps the Rise knob as a steady pitch. A positive count sweeps from
+    // unison up to Rise across that many bars, starting from risePpq.
+    int riseBars = 0;
+    double risePpq = 0, riseTempo = 120, riseQuartersPerBar = 4;
+    bool riseRunning = false;
 };
+
+inline double riseSamplePpq(double startPpq, int sampleIndex, double tempo, double sampleRate, bool running) noexcept {
+    if (!std::isfinite(startPpq)) return 0.0;
+    if (!running || sampleIndex <= 0 || !(sampleRate > 0.0) || !(tempo > 0.0) || !std::isfinite(tempo)) return startPpq;
+    return startPpq + static_cast<double>(sampleIndex) * tempo / (60.0 * sampleRate);
+}
+inline float syncedRise(float rise, int bars, double ppq, double quartersPerBar) noexcept {
+    const float amount = std::isfinite(rise) ? std::clamp(rise, 0.0f, 1.0f) : 0.0f;
+    if (bars <= 0 || !(quartersPerBar > 0.0) || !std::isfinite(ppq) || !std::isfinite(quartersPerBar)) return amount;
+    const double cycle = static_cast<double>(bars) * quartersPerBar;
+    if (!(cycle > 0.0)) return amount;
+    double wrapped = std::fmod(ppq, cycle);
+    if (wrapped < 0.0) wrapped += cycle;
+    return amount * static_cast<float>(wrapped / cycle);
+}
 
 class RackEngine {
 public:

@@ -284,3 +284,68 @@ TEST_CASE("Rapid algorithm changes settle on the latest choice in mono and stere
         if (stereo) REQUIRE(std::abs(right[i] - expectedRight[i]) < 1.0e-6f);
     }
 }
+
+TEST_CASE("Rise length math wraps to the bar and free mode ignores the clock") {
+    REQUIRE(sausage::syncedRise(0.4f, 0, 99.0, 4.0) == 0.4f);
+    REQUIRE(sausage::syncedRise(0.4f, 4, std::numeric_limits<double>::quiet_NaN(), 4.0) == 0.4f);
+    REQUIRE(sausage::syncedRise(1.0f, 4, 8.0, 4.0) == 0.5f);
+    REQUIRE(std::abs(sausage::syncedRise(1.0f, 4, -2.0, 4.0) - 0.875f) < 1.0e-6f);
+    REQUIRE(sausage::syncedRise(1.0f, 1, 3.0, 3.0) == 0.0f);
+    REQUIRE(std::abs(sausage::syncedRise(1.0f, 1, 2.999, 3.0) - 0.999666f) < 1.0e-4f);
+    REQUIRE(std::abs(sausage::riseSamplePpq(1.0, 48000, 120.0, 48000.0, true) - 3.0) < 1.0e-9);
+    REQUIRE(sausage::riseSamplePpq(1.0, 10, 120.0, 48000.0, false) == 1.0);
+}
+
+int riseCrossings(sausage::RackSettings settings, double ppq) {
+    settings.rise = settings.riseMix = 1.0f;
+    settings.risePpq = ppq;
+    settings.riseRunning = false;
+    sausage::Rack rack;
+    rack.setSettings(settings);
+    rack.prepare(48000.0);
+    auto left = signal(), right = left;
+    rack.process(left.data(), right.data(), static_cast<int>(left.size()));
+    int crossings = 0;
+    for (std::size_t i = 24001; i < left.size(); ++i)
+        if (left[i - 1] <= 0.0f && left[i] > 0.0f) ++crossings;
+    return crossings;
+}
+
+TEST_CASE("Synced rise starts near the input pitch and finishes near an octave") {
+    sausage::RackSettings settings;
+    settings.algorithm = GENERATE(sausage::Algorithm::Classic, sausage::Algorithm::Velvet, sausage::Algorithm::Punch, sausage::Algorithm::Prism);
+    settings.riseBars = 4;
+    settings.riseQuartersPerBar = 4;
+    const auto start = riseCrossings(settings, 0.0);
+    const auto end = riseCrossings(settings, 15.99);
+    const auto steady = riseCrossings(sausage::RackSettings {}, 15.99);
+    REQUIRE(end > start * 3 / 2);
+    REQUIRE(std::abs(steady - end) < std::max(40, end / 5));
+}
+
+TEST_CASE("Free rise mode ignores tempo and playhead position") {
+    sausage::RackSettings timed;
+    timed.algorithm = sausage::Algorithm::Classic;
+    timed.rise = 0.65f;
+    timed.riseMix = 0.8f;
+    timed.riseBars = 0;
+    timed.risePpq = 12.5;
+    timed.riseTempo = 174.0;
+    timed.riseRunning = true;
+    timed.riseQuartersPerBar = 3.0;
+    auto plain = timed;
+    plain.risePpq = 0.0;
+    plain.riseTempo = 120.0;
+    plain.riseRunning = false;
+    plain.riseQuartersPerBar = 4.0;
+    sausage::Rack timedRack, plainRack;
+    timedRack.setSettings(timed);
+    plainRack.setSettings(plain);
+    timedRack.prepare(48000.0);
+    plainRack.prepare(48000.0);
+    auto left = signal(), right = left, otherLeft = left, otherRight = left;
+    timedRack.process(left.data(), right.data(), static_cast<int>(left.size()));
+    plainRack.process(otherLeft.data(), otherRight.data(), static_cast<int>(otherLeft.size()));
+    REQUIRE(left == otherLeft);
+    REQUIRE(right == otherRight);
+}

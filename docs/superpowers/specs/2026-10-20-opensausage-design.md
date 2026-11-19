@@ -22,6 +22,6 @@ Each module has an independent automatable full bypass. Smooth transitions suppr
 
 ## Delivery and tests
 
-VST3 on macOS arm64/x86_64 and Windows x64; AU on macOS; standalone on both. CI runs DSP tests, editor interaction/session recall tests, screenshot capture, VST3 pluginval 1.0.4 strictness 5 and artifact packaging. Linux DSP jobs run ASan/UBSan. Version tags publish release ZIPs after builds pass. macOS bundles are ad hoc signed, not notarized. Repository uses AGPL-3.0 consistently with JUCE's open-source option.
+VST3 on macOS arm64/x86_64 and Windows x64; AU on macOS; standalone on both. CI runs DSP tests, editor interaction/session recall tests, screenshot capture, VST3 pluginval 1.0.4 strictness 5 and artifact packaging. Linux DSP jobs run ASan/UBSan. Version tags publish release ZIPs after builds pass. macOS bundles are ad hoc signed, not notarized. Repository license is MIT. JUCE remains under AGPL-3.0 or a commercial JUCE license; see THIRD_PARTY.md.
 
 Tests cover neutral latency, gain, saturation harmonics, Color response, compression linking, stereo independence, reverb tails, octave rising, mid-preserving width, all bypasses, tail clearing, silence, reset, invalid samples, automation ramps, block partition independence, UI attachments, recipe selection, session recall, animation reactions, and resize-handle placement. README screenshots are native renders, not generated UI mockups. Validate CI after pushing.
