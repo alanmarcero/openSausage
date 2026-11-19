@@ -1,6 +1,7 @@
 #pragma once
 #include "PluginProcessor.h"
 #include "SausageLookAndFeel.h"
+#include "SuiteBar.h"
 
 class ModulePanel final : public juce::Component {
 public:
@@ -21,12 +22,12 @@ private:
     int kind = 0;
     float phase = 0.0f;
     juce::Slider primary, secondary, saturationMix, dynamics, preDelay;
-    juce::ComboBox focus;
+    juce::ComboBox focus, riseLength;
     juce::TextButton bypass;
     juce::AudioProcessorValueTreeState::SliderAttachment primaryAttachment, secondaryAttachment;
     juce::AudioProcessorValueTreeState::ButtonAttachment bypassAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> saturationMixAttachment, dynamicsAttachment, preDelayAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> focusAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> focusAttachment, riseLengthAttachment;
 };
 
 class SausageEditor final : public juce::AudioProcessorEditor, private juce::Timer {
@@ -35,6 +36,7 @@ public:
     ~SausageEditor() override;
     void paint(juce::Graphics&) override;
     void resized() override;
+    bool keyPressed(const juce::KeyPress&) override;
 private:
     void timerCallback() override;
     SausageProcessor& ownerProcessor;
@@ -51,6 +53,7 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> algorithmAttachment;
     juce::AudioProcessorValueTreeState::SliderAttachment outputAttachment, masterMixAttachment;
     juce::AudioProcessorValueTreeState::ButtonAttachment bypassAttachment, softClipAttachment;
+    SuiteBar suite;
     juce::TooltipWindow tooltip {this, 500};
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SausageEditor)
 };

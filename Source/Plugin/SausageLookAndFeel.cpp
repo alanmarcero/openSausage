@@ -50,6 +50,14 @@ void SausageLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int w
 void SausageLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& button, const juce::Colour&, bool over, bool down) {
     over = over || button.hasKeyboardFocus(false);
     const auto bounds = button.getLocalBounds().toFloat().reduced(0.5f);
+    if (button.getComponentID().startsWith("suite")) {
+        const bool on = button.getToggleState();
+        g.setColour(juce::Colour(!button.isEnabled() ? 0xff141c20 : on ? 0xff243936 : over || down ? 0xff2a3b40 : 0xff182429));
+        g.fillRoundedRectangle(bounds, 5.0f);
+        g.setColour(on && button.isEnabled() ? juce::Colour(0xff48f0c8) : juce::Colour(0xff283842));
+        g.drawRoundedRectangle(bounds, 5.0f, 1.0f);
+        return;
+    }
     if (button.getComponentID() == "prevRecipe" || button.getComponentID() == "nextRecipe") {
         g.setColour(juce::Colour(over || down ? 0xff2a3b40 : 0xff182429));
         g.fillRoundedRectangle(bounds, 5.0f);
@@ -77,6 +85,12 @@ void SausageLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& b
     g.fillEllipse(10.0f, static_cast<float>(button.getHeight()) / 2.0f - 3.0f, 6.0f, 6.0f);
 }
 void SausageLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& button, bool, bool) {
+    if (button.getComponentID().startsWith("suite")) {
+        g.setColour(button.isEnabled() ? (button.getToggleState() ? juce::Colour(0xff48f0c8) : juce::Colour(0xffe6f0f5)) : juce::Colour(0xff536266));
+        g.setFont(juce::FontOptions(12.5f, juce::Font::bold));
+        g.drawText(button.getButtonText(), button.getLocalBounds(), juce::Justification::centred);
+        return;
+    }
     if (button.getComponentID() == "prevRecipe" || button.getComponentID() == "nextRecipe") {
         g.setColour(juce::Colour(0xffe6f0f5));
         g.setFont(juce::FontOptions(14.0f, juce::Font::bold));

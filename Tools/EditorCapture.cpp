@@ -63,8 +63,14 @@ int main(int argc, char** argv) {
                     && processor.parameters.getRawParameterValue("satFocus")->load() == 0.0f
                     && processor.parameters.getRawParameterValue("preDelay")->load() == 0.0f
                     && processor.parameters.getRawParameterValue("masterMix")->load() == 100.0f
-                    && processor.parameters.getRawParameterValue("softClip")->load() == 0.0f,
+                    && processor.parameters.getRawParameterValue("softClip")->load() == 0.0f
+                    && processor.parameters.getRawParameterValue("riseLength")->load() == 0.0f,
                 "New controls have compatibility defaults");
+        auto* riseLength = dynamic_cast<juce::ComboBox*>(find(*editor, "riseLength"));
+        require(riseLength && riseLength->getNumItems() == 6, "Rise length control missing");
+        require(find(*editor, "suiteUndo") && find(*editor, "suiteRedo") && find(*editor, "suiteA")
+                    && find(*editor, "suiteB") && find(*editor, "presetSearch") && find(*editor, "presetBrowser"),
+                "Undo, A/B, or preset browser missing");
         saturationMix->setValue(42.0, juce::sendNotificationSync);
         dynamics->setValue(37.0, juce::sendNotificationSync);
         focus->setSelectedId(2, juce::sendNotificationSync);
@@ -142,7 +148,7 @@ int main(int argc, char** argv) {
         for (int i = legacy.getNumChildren(); --i >= 0;)
             if (const auto id = legacy.getChild(i).getProperty("id").toString();
                 id == "algorithm" || id == "satMix" || id == "satDynamics" || id == "satFocus"
-                || id == "preDelay" || id == "masterMix" || id == "softClip") legacy.removeChild(i, nullptr);
+                || id == "preDelay" || id == "masterMix" || id == "softClip" || id == "riseLength") legacy.removeChild(i, nullptr);
         juce::MemoryBlock legacyData;
         juce::AudioProcessor::copyXmlToBinary(*legacy.createXml(), legacyData);
         saturationMix->setValue(12.0, juce::sendNotificationSync);
@@ -158,7 +164,8 @@ int main(int argc, char** argv) {
                     && processor.parameters.getRawParameterValue("satFocus")->load() == 0.0f
                     && processor.parameters.getRawParameterValue("preDelay")->load() == 0.0f
                     && processor.parameters.getRawParameterValue("masterMix")->load() == 100.0f
-                    && processor.parameters.getRawParameterValue("softClip")->load() == 0.0f,
+                    && processor.parameters.getRawParameterValue("softClip")->load() == 0.0f
+                    && processor.parameters.getRawParameterValue("riseLength")->load() == 0.0f,
                 "Legacy session did not supply defaults");
         require(algorithms->getSelectedId() == 1, "Legacy session did not update selector");
         algorithmParameter->setValueNotifyingHost(1.0f);
@@ -228,7 +235,9 @@ int main(int argc, char** argv) {
             if (dynamic_cast<juce::ResizableCornerComponent*>(child))
                 require(std::abs(child->getBoundsInParent().getRight() - editor->getWidth()) <= 1,
                         "Resize handle moved outside the enlarged editor");
-        std::cout << "PASS: saturation focus/mix/dynamics controls, four algorithms, recipe defaults, legacy/current recall, host automation, bypass, audio processing, resizing, and screenshots.\n";
+        extern int runOpenSausageSuiteTests();
+        require(runOpenSausageSuiteTests() == 0, "Suite tests failed");
+        std::cout << "PASS: saturation focus/mix/dynamics controls, four algorithms, recipe defaults, legacy/current recall, host automation, bypass, audio processing, resizing, screenshots, host programs, rise length, undo, A/B, and user presets.\n";
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
     return 0;
 }
