@@ -75,7 +75,16 @@ void RackEngine::prepare(double sampleRate) {
     rate = std::isfinite(sampleRate) ? std::clamp(sampleRate, 8000.0, 384000.0) : 48000.0;
     smoothing = static_cast<float>(std::exp(-1.0 / (0.01 * rate)));
     core.prepare(rate);
+    const auto svf = [this](double cutoff, float& a1, float& a2, float& a3) {
+        const auto g = static_cast<float>(std::tan(std::numbers::pi * std::min(cutoff, 0.42 * rate) / rate));
+        a1 = 1.0f / (1.0f + g * (g + std::numbers::sqrt2_v<float>));
+        a2 = g * a1;
+        a3 = g * g * a1;
+    };
     widthPole = static_cast<float>(std::exp(-2.0 * std::numbers::pi * 250.0 / rate));
+    svf(180.0, widthHpA1, widthHpA2, widthHpA3);
+    svf(150.0, riseFbHpA1, riseFbHpA2, riseFbHpA3);
+    svf(9000.0, riseFbLpA1, riseFbLpA2, riseFbLpA3);
     constexpr double times[] {0.0297, 0.0371, 0.0411, 0.0437, 0.0307, 0.0383, 0.0427, 0.0451};
     for (std::size_t i = 0; i < combs.size(); ++i) combs[i].resize(static_cast<std::size_t>(rate * times[i]) + 1);
     // Freeverb allpass tunings in samples at 44.1 kHz. The right channel is 23 samples longer, for stereo spread.
@@ -83,9 +92,13 @@ void RackEngine::prepare(double sampleRate) {
     for (std::size_t ch = 0; ch < diffusers.size(); ++ch)
         for (std::size_t i = 0; i < diffusers[ch].size(); ++i)
             diffusers[ch][i].resize(static_cast<std::size_t>((diffuserSamples[i] + 23.0 * static_cast<double>(ch)) * rate / 44100.0) + 1);
-    for (auto& delay : pitch) delay.resize(static_cast<std::size_t>(rate * 0.08) + 4);
+    for (auto& delay : pitch) delay.resize(static_cast<std::size_t>(rate * 0.15) + 4);
     for (auto& delay : widen) delay.resize(static_cast<std::size_t>(rate * 0.04) + 4);
-    spacePreDelay.resize(static_cast<std::size_t>(rate * 0.11) + 4);
+    for (auto& delay : spacePreDelay) delay.resize(static_cast<std::size_t>(rate * 0.11) + 4);
+    constexpr double widthMs[2][4] {{2.9, 4.7, 7.1, 10.3}, {3.7, 5.9, 8.3, 11.9}};
+    for (std::size_t ch = 0; ch < widthDiffusers.size(); ++ch)
+        for (std::size_t i = 0; i < widthDiffusers[ch].size(); ++i)
+            widthDiffusers[ch][i].resize(static_cast<std::size_t>(rate * widthMs[ch][i] * 0.0016) + 4);
     reset();
 }
 void RackEngine::reset() noexcept {
@@ -94,11 +107,17 @@ void RackEngine::reset() noexcept {
     for (auto& channel : diffusers) for (auto& delay : channel) delay.clear();
     for (auto& delay : pitch) delay.clear();
     for (auto& delay : widen) delay.clear();
-    spacePreDelay.clear();
-    damp = {}; highpass = {}; previous = {}; dry = {};
-    phase = 0.0f; dryPosition = 0;
-    grainPhases = {0.0f, 0.25f, 0.5f, 0.75f};
-    widthAllpass = {}; widthLow = widthPhase = 0.0f;
+    for (auto& delay : spacePreDelay) delay.clear();
+    for (auto& channel : widthDiffusers) for (auto& delay : channel) delay.clear();
+    fdnLp = {}; fdnLow = {}; dry = {};
+    for (std::size_t i = 0; i < fdnPhase.size(); ++i) fdnPhase[i] = static_cast<float>(i) * 0.137f;
+    dryPosition = 0;
+    riseReadAge = {static_cast<float>(rate * 0.04), static_cast<float>(rate * 0.04)};
+    riseFadeAge = riseReadAge;
+    riseFadeRemaining = {}; riseFadeTotal = {}; risePeriod = {};
+    riseFbHpIc1 = {}; riseFbHpIc2 = {}; riseFbLpIc1 = {}; riseFbLpIc2 = {};
+    clipPrevX = {}; clipPrevIntegral = {};
+    widthHpIc1 = widthHpIc2 = 0.0f; widthLow = widthPhase = 0.0f;
     smooth = target;
     if (!target.spaceOn) smooth.space = 0.0f;
     if (!target.riseOn) smooth.riseMix = 0.0f;
@@ -130,38 +149,41 @@ void RackEngine::process(float* left, float* right, int samples) noexcept {
         if (smooth.space > 0.0f) {
             spaceCleared = false;
             float wet[] {0.0f, 0.0f};
-            const auto rawMid = (l + r) * 0.5f;
-            spacePreDelay.write(rawMid);
+            const float stereoIn[] {l, r};
+            for (std::size_t ch = 0; ch < 2; ++ch) spacePreDelay[ch].write(stereoIn[ch]);
             const auto preDelaySamples = static_cast<float>(rate) * smooth.preDelayMs * 0.001f;
-            const auto mid = preDelaySamples >= 1.0f ? spacePreDelay.read(preDelaySamples) : rawMid;
+            float fdnIn[] {l, r};
+            if (preDelaySamples >= 1.0f)
+                for (std::size_t ch = 0; ch < 2; ++ch) fdnIn[ch] = spacePreDelay[ch].read(preDelaySamples);
             const auto mode = target.algorithm;
             std::array<float, 8> echoes {}, feedbackSignal {};
             const auto damping = mode == Algorithm::Velvet ? 0.6f : mode == Algorithm::Prism ? 0.2f : 0.35f;
+            const auto lfDamp = mode == Algorithm::Velvet ? 0.28f : mode == Algorithm::Prism ? 0.12f : 0.2f;
+            const auto lfPole = static_cast<float>(std::exp(-2.0 * std::numbers::pi * 220.0 / rate));
             for (std::size_t tap = 0; tap < combs.size(); ++tap) {
-                const auto len = combs[tap].data.size() - 1;
-                const auto delaySamples = mode == Algorithm::Punch ? static_cast<std::size_t>(std::floor(static_cast<float>(len) * 0.4f)) : len;
-                echoes[tap] = combs[tap].readFixed(delaySamples);
-                damp[tap] = echoes[tap] * (1.0f - damping) + damp[tap] * damping;
-                feedbackSignal[tap] = damp[tap];
+                const auto len = static_cast<float>(combs[tap].data.size() - 1);
+                fdnPhase[tap] += static_cast<float>((0.4 + 0.11 * static_cast<double>(tap)) / rate);
+                fdnPhase[tap] -= std::floor(fdnPhase[tap]);
+                const auto modulation = std::sin(2.0f * std::numbers::pi_v<float> * fdnPhase[tap]) * static_cast<float>(rate * 0.0012);
+                const auto baseDelay = mode == Algorithm::Punch ? len * 0.4f : len;
+                echoes[tap] = combs[tap].read(std::clamp(baseDelay + modulation, 2.0f, len));
+                fdnLp[tap] = echoes[tap] * (1.0f - damping) + fdnLp[tap] * damping;
+                fdnLow[tap] = fdnLp[tap] + lfPole * (fdnLow[tap] - fdnLp[tap]);
+                feedbackSignal[tap] = fdnLp[tap] - lfDamp * fdnLow[tap];
                 wet[tap / 4] += echoes[tap] * 0.6f;
             }
-            if (mode == Algorithm::Velvet) {
-                float sum = 0.0f;
-                for (const auto value : damp) sum += value;
-                for (auto& value : feedbackSignal) value -= 0.25f * sum;
-            } else if (mode == Algorithm::Prism) {
-                for (std::size_t stride = 1; stride < feedbackSignal.size(); stride *= 2)
-                    for (std::size_t base = 0; base < feedbackSignal.size(); base += stride * 2)
-                        for (std::size_t j = 0; j < stride; ++j) {
-                            const auto a = feedbackSignal[base + j], b = feedbackSignal[base + j + stride];
-                            feedbackSignal[base + j] = a + b;
-                            feedbackSignal[base + j + stride] = a - b;
-                        }
-                for (auto& value : feedbackSignal) value *= 0.3535533905932738f;
-            }
+            // Orthogonal 8x8 Hadamard mixing spreads every tap across the network each sample.
+            for (std::size_t stride = 1; stride < feedbackSignal.size(); stride *= 2)
+                for (std::size_t base = 0; base < feedbackSignal.size(); base += stride * 2)
+                    for (std::size_t j = 0; j < stride; ++j) {
+                        const auto a = feedbackSignal[base + j], b = feedbackSignal[base + j + stride];
+                        feedbackSignal[base + j] = a + b;
+                        feedbackSignal[base + j + stride] = a - b;
+                    }
+            for (auto& value : feedbackSignal) value *= 0.3535533905932738f;
             const auto feedback = mode == Algorithm::Punch ? 0.25f + smooth.size * 0.5f : 0.45f + smooth.size * 0.49f;
             for (std::size_t tap = 0; tap < combs.size(); ++tap)
-                combs[tap].write(mid * 0.25f + feedbackSignal[tap] * feedback);
+                combs[tap].write(fdnIn[tap / 4] * 0.25f + feedbackSignal[tap] * feedback);
             // Series Schroeder allpasses, (z^-N - g) / (1 - g z^-N), turn the sparse comb echoes into a dense tail.
             // Freeverb's version outputs delayed - input, which is not allpass and boosts some frequencies up to 4x.
             for (std::size_t ch = 0; ch < diffusers.size(); ++ch) {
@@ -177,61 +199,94 @@ void RackEngine::process(float* left, float* right, int samples) noexcept {
         } else if (!spaceCleared) {
             for (auto& delay : combs) delay.clear();
             for (auto& channel : diffusers) for (auto& delay : channel) delay.clear();
-            spacePreDelay.clear();
-            damp = {}; spaceCleared = true;
+            for (auto& delay : spacePreDelay) delay.clear();
+            fdnLp = {}; fdnLow = {}; spaceCleared = true;
         }
 
         if (smooth.riseMix > 0.0f) {
             riseCleared = false;
             const auto mode = target.algorithm;
-            const auto windowSeconds = mode == Algorithm::Velvet ? 0.065 : mode == Algorithm::Punch ? 0.02 : 0.05;
-            const auto window = static_cast<float>(rate * windowSeconds);
             const auto amount = syncedRise(smooth.rise, target.riseBars,
                 riseSamplePpq(target.risePpq, i, target.riseTempo, rate, target.riseRunning), target.riseQuartersPerBar);
-            const auto ratio = std::pow(2.0f, amount);
-            phase += (ratio - 1.0f) / window;
-            phase -= std::floor(phase);
+            const auto ratio = std::clamp(std::pow(2.0f, amount), 1.0f, 2.0f);
             const float inputs[] {l, r};
             std::array<float, 2> shifted {};
-            const auto heads = mode == Algorithm::Velvet || mode == Algorithm::Prism ? 4 : 2;
-            if (heads == 4)
-                for (std::size_t head = 0; head < grainPhases.size(); ++head) {
-                    grainPhases[head] += (ratio - 1.0f) / (window * (1.0f + 0.06f * static_cast<float>(head)));
-                    grainPhases[head] -= std::floor(grainPhases[head]);
-                }
-            const auto hpPole = static_cast<float>(std::exp(-2.0 * std::numbers::pi * (20.0 + 600.0 * amount) / rate));
+            const int fadeLength = static_cast<int>(rate * (mode == Algorithm::Velvet ? 0.012 : mode == Algorithm::Punch ? 0.003 : mode == Algorithm::Prism ? 0.008 : 0.006));
+            const auto triggerAge = static_cast<float>(rate * 0.016);
             for (std::size_t ch = 0; ch < 2; ++ch) {
-                if (mode == Algorithm::Classic) {
-                    const auto second = std::fmod(phase + 0.5f, 1.0f);
-                    const auto weight = 0.5f - 0.5f * std::cos(2.0f * std::numbers::pi_v<float> * phase);
-                    shifted[ch] = weight * pitch[ch].read(2.0f + (1.0f - phase) * window)
-                                  + (1.0f - weight) * pitch[ch].read(2.0f + (1.0f - second) * window);
-                } else {
-                    float totalWeight = 0.0f;
-                    for (int head = 0; head < heads; ++head) {
-                        const auto grainPhase = heads == 4 ? grainPhases[static_cast<std::size_t>(head)] : phase + static_cast<float>(head) * 0.5f;
-                        const auto grainWindow = heads == 4 ? window * (1.0f + 0.06f * static_cast<float>(head)) : window;
-                        const auto position = std::fmod(grainPhase
-                                                       + (mode == Algorithm::Prism ? static_cast<float>(ch) * 0.125f : 0.0f), 1.0f);
-                        const auto weight = mode == Algorithm::Punch ? 1.0f - std::abs(2.0f * position - 1.0f)
-                            : (1.0f - std::cos(2.0f * std::numbers::pi_v<float> * position)) / static_cast<float>(heads);
-                        shifted[ch] += weight * pitch[ch].read(2.0f + (1.0f - position) * grainWindow);
-                        totalWeight += weight;
+                riseReadAge[ch] -= ratio - 1.0f;
+                if (riseFadeRemaining[ch] > 0) riseFadeAge[ch] -= ratio - 1.0f;
+                if (riseFadeRemaining[ch] <= 0 && riseReadAge[ch] < triggerAge && ratio > 1.0f) {
+                    // Pitch-synchronous jump: find the lag whose waveform best matches the current read segment.
+                    const int minLag = std::max(16, static_cast<int>(rate / 1200.0));
+                    const int maxLag = std::min(static_cast<int>(rate / 40.0), static_cast<int>(rate * 0.03));
+                    constexpr int segment = 48;
+                    int bestLag = std::min(maxLag, std::max(minLag, static_cast<int>(rate * 0.005)));
+                    double bestCorrelation = -2.0;
+                    for (int lag = minLag; lag <= maxLag; lag += 8) {
+                        double xy = 0.0, xx = 0.0, yy = 0.0;
+                        for (int k = 0; k < segment; ++k) {
+                            const auto a = static_cast<double>(pitch[ch].read(riseReadAge[ch] + static_cast<float>(k)));
+                            const auto b = static_cast<double>(pitch[ch].read(riseReadAge[ch] + static_cast<float>(lag + k)));
+                            xy += a * b; xx += a * a; yy += b * b;
+                        }
+                        const auto correlation = xy / std::sqrt(xx * yy + 1.0e-12);
+                        if (correlation > bestCorrelation) { bestCorrelation = correlation; bestLag = lag; }
                     }
-                    shifted[ch] /= std::max(totalWeight, 1.0e-6f);
+                    for (int lag = std::max(minLag, bestLag - 7); lag <= std::min(maxLag, bestLag + 7); ++lag) {
+                        double xy = 0.0, xx = 0.0, yy = 0.0;
+                        for (int k = 0; k < segment; ++k) {
+                            const auto a = static_cast<double>(pitch[ch].read(riseReadAge[ch] + static_cast<float>(k)));
+                            const auto b = static_cast<double>(pitch[ch].read(riseReadAge[ch] + static_cast<float>(lag + k)));
+                            xy += a * b; xx += a * a; yy += b * b;
+                        }
+                        const auto correlation = xy / std::sqrt(xx * yy + 1.0e-12);
+                        if (correlation > bestCorrelation) { bestCorrelation = correlation; bestLag = lag; }
+                    }
+                    risePeriod[ch] = bestLag;
+                    riseFadeAge[ch] = riseReadAge[ch] + static_cast<float>(bestLag);
+                    riseFadeTotal[ch] = std::clamp(bestLag / 2, 32, std::max(32, fadeLength));
+                    riseFadeRemaining[ch] = riseFadeTotal[ch];
                 }
+                float out = pitch[ch].read(std::max(2.0f, riseReadAge[ch]));
+                if (riseFadeRemaining[ch] > 0) {
+                    const auto total = std::max(32, riseFadeTotal[ch]);
+                    const auto t = 1.0f - static_cast<float>(riseFadeRemaining[ch]) / static_cast<float>(total);
+                    const auto fadeIn = 0.5f - 0.5f * std::cos(std::numbers::pi_v<float> * std::clamp(t, 0.0f, 1.0f));
+                    out = (1.0f - fadeIn) * out + fadeIn * pitch[ch].read(std::max(2.0f, riseFadeAge[ch]));
+                    if (--riseFadeRemaining[ch] == 0) riseReadAge[ch] = riseFadeAge[ch];
+                }
+                shifted[ch] = out;
             }
             const auto feedback = mode == Algorithm::Velvet ? 0.16f : mode == Algorithm::Punch ? 0.1f : 0.25f;
             for (std::size_t ch = 0; ch < 2; ++ch) {
-                pitch[ch].write(inputs[ch] + shifted[mode == Algorithm::Prism ? 1 - ch : ch] * amount * feedback);
-                highpass[ch] = shifted[ch] - previous[ch] + hpPole * highpass[ch];
-                previous[ch] = shifted[ch];
-                (ch == 0 ? l : r) += smooth.riseMix * (highpass[ch] - inputs[ch]);
+                float feedbackSource = shifted[ch];
+                if (mode == Algorithm::Prism) {
+                    // TPT SVF band-limit (150 Hz high-pass into 9 kHz low-pass) plus tanh clamp keeps the cross loop stable.
+                    const auto raw = shifted[1 - ch];
+                    const auto v3h = raw - riseFbHpIc2[ch];
+                    const auto v1h = riseFbHpA1 * riseFbHpIc1[ch] + riseFbHpA2 * v3h;
+                    const auto v2h = riseFbHpIc2[ch] + riseFbHpA2 * riseFbHpIc1[ch] + riseFbHpA3 * v3h;
+                    riseFbHpIc1[ch] = 2.0f * v1h - riseFbHpIc1[ch];
+                    riseFbHpIc2[ch] = 2.0f * v2h - riseFbHpIc2[ch];
+                    const auto highPassed = raw - std::numbers::sqrt2_v<float> * v1h - v2h;
+                    const auto v3l = highPassed - riseFbLpIc2[ch];
+                    const auto v1l = riseFbLpA1 * riseFbLpIc1[ch] + riseFbLpA2 * v3l;
+                    const auto v2l = riseFbLpIc2[ch] + riseFbLpA2 * riseFbLpIc1[ch] + riseFbLpA3 * v3l;
+                    riseFbLpIc1[ch] = 2.0f * v1l - riseFbLpIc1[ch];
+                    riseFbLpIc2[ch] = 2.0f * v2l - riseFbLpIc2[ch];
+                    feedbackSource = std::tanh(std::clamp(v2l, -4.0f, 4.0f));
+                }
+                pitch[ch].write(inputs[ch] + feedbackSource * amount * feedback);
+                (ch == 0 ? l : r) += smooth.riseMix * (shifted[ch] - inputs[ch]);
             }
         } else if (!riseCleared) {
             for (auto& delay : pitch) delay.clear();
-            highpass = {}; previous = {}; phase = 0.0f; riseCleared = true;
-            grainPhases = {0.0f, 0.25f, 0.5f, 0.75f};
+            riseFadeRemaining = {}; riseFadeTotal = {}; risePeriod = {};
+            riseReadAge = {static_cast<float>(rate * 0.04), static_cast<float>(rate * 0.04)};
+            riseFadeAge = riseReadAge;
+            riseFbHpIc1 = {}; riseFbHpIc2 = {}; riseFbLpIc1 = {}; riseFbLpIc2 = {};
+            riseCleared = true;
         }
 
         if (smooth.width > 0.0f && right) {
@@ -240,14 +295,14 @@ void RackEngine::process(float* left, float* right, int samples) noexcept {
             const auto side = (l - r) * 0.5f;
             float decorrelated;
             if (target.algorithm == Algorithm::Velvet) {
-                constexpr float coefficients[2][4] {{0.2f, 0.45f, -0.25f, 0.7f}, {-0.45f, 0.1f, 0.6f, -0.65f}};
                 float outputs[] {mid, mid};
                 for (std::size_t ch = 0; ch < 2; ++ch)
-                    for (std::size_t stage = 0; stage < 4; ++stage) {
-                        const auto coefficient = coefficients[ch][stage] * (0.3f + smooth.spread * 0.6f);
-                        const auto output = widthAllpass[ch][stage] - coefficient * outputs[ch];
-                        widthAllpass[ch][stage] = outputs[ch] + coefficient * output;
-                        outputs[ch] = output;
+                    for (auto& allpass : widthDiffusers[ch]) {
+                        const auto delaySamples = static_cast<float>(allpass.data.size() - 1) * (0.7f + 0.5f * smooth.spread);
+                        const auto delayed = allpass.read(delaySamples);
+                        const auto fed = outputs[ch] + 0.5f * delayed;
+                        allpass.write(fed);
+                        outputs[ch] = delayed - 0.5f * fed;
                     }
                 decorrelated = outputs[0] - outputs[1];
             } else {
@@ -262,25 +317,36 @@ void RackEngine::process(float* left, float* right, int samples) noexcept {
                 widen[0].write(mid); widen[1].write(mid);
                 decorrelated = first - second;
             }
-            auto added = side + decorrelated * 0.65f;
+            // 180 Hz LR2 (TPT SVF) on the decorrelated injection only keeps sub-bass mono-compatible.
+            const auto v3 = decorrelated - widthHpIc2;
+            const auto v1 = widthHpA1 * widthHpIc1 + widthHpA2 * v3;
+            const auto v2 = widthHpIc2 + widthHpA2 * widthHpIc1 + widthHpA3 * v3;
+            widthHpIc1 = 2.0f * v1 - widthHpIc1;
+            widthHpIc2 = 2.0f * v2 - widthHpIc2;
+            const auto decorrelatedSafe = decorrelated - std::numbers::sqrt2_v<float> * v1 - v2;
+            auto added = side + decorrelatedSafe * 0.65f;
             if (target.algorithm == Algorithm::Punch) {
                 widthLow = added + widthPole * (widthLow - added);
                 added -= widthLow;
             }
             const auto widened = target.algorithm == Algorithm::Classic
-                ? side * (1.0f + smooth.width) + decorrelated * smooth.width * 0.65f : side + added * smooth.width;
+                ? side * (1.0f + smooth.width) + decorrelatedSafe * smooth.width * 0.65f : side + added * smooth.width;
             l = mid + widened; r = mid - widened;
         } else if (!widthCleared) {
             for (auto& delay : widen) delay.clear();
-            widthAllpass = {}; widthLow = widthPhase = 0.0f;
+            for (auto& channel : widthDiffusers) for (auto& delay : channel) delay.clear();
+            widthHpIc1 = widthHpIc2 = 0.0f; widthLow = widthPhase = 0.0f;
             widthCleared = true;
         }
         const auto gain = std::pow(10.0f, smooth.outputDb / 20.0f);
         float wetOutL = l * gain;
         float wetOutR = r * gain;
+        // ADAA-1 tanh runs every sample so its state stays warm when Soft Clip toggles on.
+        const auto clippedL = static_cast<float>(Waveshaper::tanhAdaa1(wetOutL, clipPrevX[0], clipPrevIntegral[0]));
+        const auto clippedR = static_cast<float>(Waveshaper::tanhAdaa1(wetOutR, clipPrevX[1], clipPrevIntegral[1]));
         if (target.softClip) {
-            wetOutL = std::tanh(wetOutL);
-            wetOutR = std::tanh(wetOutR);
+            wetOutL = clippedL;
+            wetOutR = clippedR;
         }
         const float mixedL = delayed[0] + smooth.masterMix * (wetOutL - delayed[0]);
         const float mixedR = delayed[1] + smooth.masterMix * (wetOutR - delayed[1]);
@@ -300,36 +366,49 @@ void Rack::setSettings(RackSettings settings) noexcept {
 void Rack::prepare(double sampleRate) {
     const auto rate = std::isfinite(sampleRate) ? std::clamp(sampleRate, 8000.0, 384000.0) : 48000.0;
     fadeSamples = static_cast<int>(rate * 0.02);
+    warmupSamples = static_cast<int>(rate * 0.05);
     for (auto& engine : engines) { engine.setSettings(target); engine.prepare(rate); }
     reset();
 }
 void Rack::reset() noexcept {
-    current = 0; transition = 0;
+    current = 0; transition = 0; warmup = 0;
     algorithms.fill(target.algorithm);
     for (auto& engine : engines) { engine.setSettings(target); engine.reset(); }
 }
 void Rack::process(float* left, float* right, int samples) noexcept {
     if (left == nullptr || samples <= 0) return;
-    if (transition == 0 && algorithms[current] == target.algorithm) {
+    if (warmup == 0 && transition == 0 && algorithms[current] == target.algorithm) {
         engines[current].process(left, right, samples);
         return;
     }
     for (int i = 0; i < samples; ++i) {
         const auto next = 1 - current;
-        if (transition == 0 && algorithms[current] != target.algorithm) {
+        if (target.algorithm == algorithms[current]) {
+            warmup = 0; transition = 0;
+        } else if (warmup == 0 && transition == 0) {
             algorithms[next] = target.algorithm;
             engines[next].setSettings(target);
             engines[next].reset();
-            transition = Core::latency + fadeSamples;
+            warmup = warmupSamples;
+        } else if (target.algorithm != algorithms[next]) {
+            algorithms[next] = target.algorithm;
+            engines[next].setSettings(target);
+            engines[next].reset();
+            warmup = warmupSamples; transition = 0;
         }
         auto l = left[i], r = right ? right[i] : 0.0f;
         engines[current].process(left + i, right ? right + i : nullptr, 1);
-        if (transition > 0) {
+        if (warmup > 0) {
             engines[next].process(&l, right ? &r : nullptr, 1);
-            if (transition <= fadeSamples) {
-                const auto mix = static_cast<float>(fadeSamples - transition + 1) / static_cast<float>(fadeSamples);
-                left[i] += mix * (l - left[i]);
-                if (right) right[i] += mix * (r - right[i]);
+            if (--warmup == 0) transition = fadeSamples;
+        } else if (transition > 0) {
+            engines[next].process(&l, right ? &r : nullptr, 1);
+            const auto progress = static_cast<float>(fadeSamples - transition + 1) / static_cast<float>(fadeSamples);
+            const auto angle = progress * 0.5f * std::numbers::pi_v<float>;
+            const auto sameRight = !right || r == right[i];
+            if (l != left[i] || !sameRight) {
+                left[i] = std::cos(angle) * left[i] + std::sin(angle) * l;
+                if (right) right[i] = std::cos(angle) * right[i] + std::sin(angle) * r;
             }
             if (--transition == 0) current = next;
         }

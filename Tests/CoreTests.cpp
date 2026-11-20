@@ -6,6 +6,7 @@
 #include <complex>
 #include <limits>
 #include <numbers>
+#include <ranges>
 #include <vector>
 
 namespace {
@@ -229,18 +230,134 @@ TEST_CASE("Empty blocks and disconnected input are harmless") {
 }
 
 TEST_CASE("Antiderivative shapers handle repeated inputs and clipping boundaries") {
-    for (const auto mode : {sausage::Algorithm::Velvet, sausage::Algorithm::Punch, sausage::Algorithm::Prism}) {
-        sausage::Waveshaper shaper;
-        for (const auto x : {-10.0f, -1.0f, -1.0e-6f, 0.0f, 1.0e-6f, 1.0f, 10.0f}) {
-            REQUIRE(std::isfinite(shaper.process(x, mode)));
-            const auto expected = mode == sausage::Algorithm::Velvet ? 2.0f / std::numbers::pi_v<float> * std::atan(x)
-                : mode == sausage::Algorithm::Punch ? std::clamp(x, -1.0f, 1.0f) : std::sin(x);
-            REQUIRE(std::abs(shaper.process(x, mode) - expected) < 1.0e-6f);
-        }
-    }
+    const std::array<float, 7> inputs {-10.0f, -1.0f, -1.0e-6f, 0.0f, 1.0e-6f, 1.0f, 10.0f};
+    std::ranges::for_each(inputs, [](float x) {
+        sausage::Waveshaper punch, prism;
+        REQUIRE(std::isfinite(punch.process(x, sausage::Algorithm::Punch)));
+        REQUIRE(std::isfinite(punch.process(x, sausage::Algorithm::Punch)));
+        REQUIRE(punch.process(x, sausage::Algorithm::Punch) == Catch::Approx(std::clamp(x, -1.0f, 1.0f)).margin(1.0e-6f));
+        REQUIRE(std::isfinite(prism.process(x, sausage::Algorithm::Prism)));
+        REQUIRE(std::isfinite(prism.process(x, sausage::Algorithm::Prism)));
+        REQUIRE(prism.process(x, sausage::Algorithm::Prism) == Catch::Approx(std::sin(x)).margin(1.0e-6f));
+        sausage::Waveshaper classic, velvet;
+        REQUIRE(std::isfinite(classic.process(x, sausage::Algorithm::Classic)));
+        REQUIRE(std::isfinite(classic.process(x, sausage::Algorithm::Classic)));
+        REQUIRE(std::isfinite(velvet.process(x, sausage::Algorithm::Velvet)));
+        REQUIRE(std::isfinite(velvet.process(x, sausage::Algorithm::Velvet)));
+    });
     sausage::Waveshaper clip;
-    REQUIRE(clip.process(2.0f, sausage::Algorithm::Punch) == 0.75f);
-    REQUIRE(clip.process(-2.0f, sausage::Algorithm::Punch) == 0.0f);
+    REQUIRE(clip.process(2.0f, sausage::Algorithm::Punch) == Catch::Approx(7.0f / 24.0f).margin(1.0e-6f));
+    REQUIRE(clip.process(2.0f, sausage::Algorithm::Punch) == Catch::Approx(23.0f / 24.0f).margin(1.0e-6f));
+    REQUIRE(clip.process(2.0f, sausage::Algorithm::Punch) == Catch::Approx(1.0f).margin(1.0e-6f));
+}
+
+TEST_CASE("Second-order ADAA in Punch and Prism suppresses high-drive folded harmonics into baseband") {
+    constexpr int size = 4096, fundamental = 193, alias21 = size - 21 * fundamental;
+    const std::array<sausage::Algorithm, 2> modes {sausage::Algorithm::Punch, sausage::Algorithm::Prism};
+    std::ranges::for_each(modes, [&](sausage::Algorithm mode) {
+        sausage::Waveshaper shaper;
+        std::complex<double> antialiased {}, direct {};
+        std::ranges::for_each(std::views::iota(-size, size), [&](int i) {
+            const auto x = static_cast<float>(25.0 * std::sin(2.0 * std::numbers::pi * fundamental * i / size));
+            const auto y = shaper.process(x, mode);
+            double raw = std::sin(static_cast<double>(x));
+            if (mode == sausage::Algorithm::Punch) raw = std::clamp<double>(x, -1.0, 1.0);
+            if (i < 0) return;
+            const auto basis = std::polar(1.0, -2.0 * std::numbers::pi * alias21 * i / size);
+            antialiased += basis * static_cast<double>(y);
+            direct += basis * raw;
+        });
+        REQUIRE(std::abs(direct) > 1.0);
+        REQUIRE(std::abs(antialiased) < 0.03 * std::abs(direct));
+    });
+}
+
+TEST_CASE("Classic and Velvet shapers generate dynamic hysteretic even harmonics while keeping silence zero") {
+    const std::array<sausage::Algorithm, 2> modes {sausage::Algorithm::Classic, sausage::Algorithm::Velvet};
+    std::ranges::for_each(modes, [](sausage::Algorithm mode) {
+        sausage::Waveshaper silent;
+        REQUIRE(silent.process(0.0f, mode) == 0.0f);
+
+        sausage::Waveshaper shaper;
+        constexpr int window = 8192, cycles = 19;
+        double secondReal = 0.0, secondImag = 0.0;
+        std::ranges::for_each(std::views::iota(-window, window), [&](int i) {
+            const auto angle = 2.0 * std::numbers::pi * static_cast<double>(cycles * i) / static_cast<double>(window);
+            const auto y = static_cast<double>(shaper.process(static_cast<float>(2.5 * std::sin(angle)), mode));
+            if (i < 0) return;
+            secondReal += y * std::cos(2.0 * angle);
+            secondImag += y * std::sin(2.0 * angle);
+        });
+        const auto secondHarmonic = 2.0 * std::hypot(secondReal, secondImag) / static_cast<double>(window);
+        REQUIRE(secondHarmonic > 0.01);
+    });
+}
+
+TEST_CASE("Polyphase halfband cascade stays flat near 20 kHz at 44.1 kHz and rejects stopband aliases above 95 dB") {
+    const auto renderAt44k1 = [](float frequency, float level, float fatness) {
+        sausage::Core core;
+        sausage::Settings settings;
+        settings.fatness = fatness;
+        settings.dynamics = 0.0f;
+        settings.saturationMix = 1.0f;
+        core.setSettings(settings);
+        core.prepare(44100.0);
+        constexpr int total = 17640;
+        std::vector<float> buffer(total);
+        std::ranges::for_each(std::views::iota(0, total), [&](int i) {
+            buffer[static_cast<std::size_t>(i)] = level * std::sin(2.0f * std::numbers::pi_v<float> * frequency * static_cast<float>(i) / 44100.0f);
+        });
+        core.process(buffer.data(), nullptr, total);
+        return buffer;
+    };
+
+    const auto midBand = renderAt44k1(1000.0f, 0.001f, 0.2f);
+    const auto topBand = renderAt44k1(20000.0f, 0.001f, 0.2f);
+    REQUIRE(rms(topBand) / rms(midBand) > 0.95f);
+
+    const auto aliasSignal = renderAt44k1(16100.0f, 0.5f, 0.85f);
+    constexpr int begin = 8820, window = 8820;
+    double real = 0.0, imag = 0.0;
+    std::ranges::for_each(std::views::iota(begin, begin + window), [&](int i) {
+        const double phase = 2.0 * std::numbers::pi * 4200.0 * static_cast<double>(i) / 44100.0;
+        real += static_cast<double>(aliasSignal[static_cast<std::size_t>(i)]) * std::cos(phase);
+        imag += static_cast<double>(aliasSignal[static_cast<std::size_t>(i)]) * std::sin(phase);
+    });
+    const double foldedAlias = 2.0 * std::hypot(real, imag) / static_cast<double>(window);
+    REQUIRE(foldedAlias < 1.5e-5);
+}
+
+TEST_CASE("LR4 saturation focus isolates 60 Hz sub-bass in KeepLow and 6 kHz treble in KeepHigh") {
+    sausage::Settings keepLow;
+    keepLow.fatness = 0.85f;
+    keepLow.color = 0.8f;
+    keepLow.dynamics = 0.0f;
+    keepLow.focus = sausage::SaturationFocus::KeepLow;
+    REQUIRE(harmonic(render(keepLow, 60.0f), 180.0f) < 0.002f);
+
+    sausage::Settings keepHigh;
+    keepHigh.fatness = 0.85f;
+    keepHigh.color = 0.0f;
+    keepHigh.dynamics = 0.0f;
+    keepHigh.focus = sausage::SaturationFocus::KeepHigh;
+    REQUIRE(harmonic(render(keepHigh, 6000.0f), 18000.0f) < 0.002f);
+}
+
+TEST_CASE("High-pass weighted RMS compressor ignores deep sub-bass pumping relative to midrange") {
+    const auto measureReduction = [](float frequency) {
+        sausage::Core core;
+        sausage::Settings settings;
+        settings.fatness = 0.7f;
+        settings.dynamics = 1.0f;
+        core.setSettings(settings);
+        core.prepare(48000.0);
+        auto data = sine(frequency, 1.0f, 24000);
+        core.process(data.data(), nullptr, static_cast<int>(data.size()));
+        return core.reductionDb();
+    };
+    const float subReduction = measureReduction(35.0f);
+    const float midReduction = measureReduction(500.0f);
+    REQUIRE(midReduction > subReduction + 3.5f);
 }
 
 TEST_CASE("Antiderivative shapers suppress a folded third harmonic relative to direct shaping") {

@@ -1,3 +1,5 @@
-48 factory recipes are DAW programs. Rise length can be free or synced to the host tempo at 1, 2, 4, 8, or 16 bars. The editor adds undo/redo, A/B compare, and user presets. The license is MIT.
+# openSausage 1.11.0
 
-The v1.10.0 tag did not publish. Actions rejected the release at startup because the build workflow's preview job requests contents write and the release caller only granted contents read. The caller now grants that permission.
+- **Antialiased Waveshaping:** Added second-order antiderivative anti-aliasing (ADAA2) to Punch and Prism shapers, plus dynamic hysteretic even harmonics in Classic and Velvet modes and an antialiased rack soft clipper.
+- **Polyphase Oversampling & Crossover:** Upgraded oversampling to a polyphase halfband cascade flat to 20 kHz with >95 dB stopband alias rejection, and added LR4 saturation focus crossovers.
+- **Compressor & Spatial FX:** Added high-pass weighted RMS detection to prevent sub-bass pumping, true-stereo FDN Space reverb, WSOLA Rise pitch shifting with filtered Prism feedback, and sub-bass-safe Width with Velvet midrange dispersion.
