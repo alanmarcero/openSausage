@@ -4,7 +4,9 @@
 #include <limits>
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <numbers>
+#include <ranges>
 #include <vector>
 
 namespace {
@@ -348,4 +350,202 @@ TEST_CASE("Free rise mode ignores tempo and playhead position") {
     plainRack.process(otherLeft.data(), otherRight.data(), static_cast<int>(otherLeft.size()));
     REQUIRE(left == otherLeft);
     REQUIRE(right == otherRight);
+}
+
+TEST_CASE("Space FDN preserves true stereo input localization and reverbs pure side signals") {
+    sausage::Rack antiPhaseRack;
+    sausage::RackSettings settings;
+    settings.space = 1.0f;
+    settings.size = 0.75f;
+    antiPhaseRack.setSettings(settings);
+    antiPhaseRack.prepare(48000.0);
+    std::vector<float> sideL(24000, 0.0f), sideR(24000, 0.0f);
+    sideL[0] = 1.0f;
+    sideR[0] = -1.0f;
+    antiPhaseRack.process(sideL.data(), sideR.data(), 24000);
+    REQUIRE(energy(sideL, 1500) > 0.001);
+    REQUIRE(energy(sideR, 1500) > 0.001);
+
+    sausage::Rack hardLeftRack, hardRightRack;
+    hardLeftRack.setSettings(settings);
+    hardRightRack.setSettings(settings);
+    hardLeftRack.prepare(48000.0);
+    hardRightRack.prepare(48000.0);
+    std::vector<float> panLL(12000, 0.0f), panLR(12000, 0.0f);
+    std::vector<float> panRL(12000, 0.0f), panRR(12000, 0.0f);
+    panLL[0] = 1.0f;
+    panRR[0] = 1.0f;
+    hardLeftRack.process(panLL.data(), panLR.data(), 12000);
+    hardRightRack.process(panRL.data(), panRR.data(), 12000);
+    REQUIRE(panLL != panRL);
+}
+
+TEST_CASE("WSOLA Rise maintains steady tonal envelope without granular comb warble and clamps Prism feedback") {
+    const auto mode = GENERATE(sausage::Algorithm::Classic, sausage::Algorithm::Velvet, sausage::Algorithm::Punch, sausage::Algorithm::Prism);
+    sausage::Rack rack;
+    sausage::RackSettings settings;
+    settings.algorithm = mode;
+    settings.sausageOn = false;
+    settings.spaceOn = false;
+    settings.widthOn = false;
+    settings.rise = 1.0f;
+    settings.riseMix = 1.0f;
+    rack.setSettings(settings);
+    rack.prepare(48000.0);
+    auto left = signal(48000), right = left;
+    rack.process(left.data(), right.data(), 48000);
+
+    constexpr int win = 480;
+    float minRms = 1.0e9f, maxRms = 0.0f;
+    std::ranges::for_each(std::views::iota(40, 95), [&](int block) {
+        double sumSq = 0.0;
+        const int base = block * win;
+        std::ranges::for_each(std::views::iota(base, base + win), [&](int idx) {
+            const float s = left[static_cast<std::size_t>(idx)];
+            sumSq += static_cast<double>(s * s);
+        });
+        const float blockRms = static_cast<float>(std::sqrt(sumSq / static_cast<double>(win)));
+        minRms = std::min(minRms, blockRms);
+        maxRms = std::max(maxRms, blockRms);
+    });
+    REQUIRE(maxRms > 0.05f);
+    REQUIRE(minRms > 0.72f * maxRms);
+}
+
+TEST_CASE("Prism Rise filters and soft-clamps cross-channel pitch feedback") {
+    sausage::Rack rack;
+    sausage::RackSettings settings;
+    settings.algorithm = sausage::Algorithm::Prism;
+    settings.sausageOn = false;
+    settings.spaceOn = false;
+    settings.widthOn = false;
+    settings.rise = 1.0f;
+    settings.riseMix = 1.0f;
+    rack.setSettings(settings);
+    rack.prepare(48000.0);
+
+    std::vector<float> left(12000, 0.0f), right(12000, 0.0f);
+    std::ranges::for_each(std::views::iota(0, 32), [&](int i) {
+        left[static_cast<std::size_t>(i)] = 20.0f;
+        right[static_cast<std::size_t>(i)] = -20.0f;
+    });
+    rack.process(left.data(), right.data(), 12000);
+
+    float tailPeak = 0.0f;
+    std::ranges::for_each(std::views::iota(4000, 12000), [&](int i) {
+        tailPeak = std::max(tailPeak, std::abs(left[static_cast<std::size_t>(i)]));
+    });
+    REQUIRE(tailPeak < 0.5f);
+}
+
+TEST_CASE("Width protects sub-bass mono compatibility in all modes and disperses midrange in Velvet") {
+    const auto mode = GENERATE(sausage::Algorithm::Classic, sausage::Algorithm::Velvet, sausage::Algorithm::Punch, sausage::Algorithm::Prism);
+    const auto sideRatioAt = [&](float frequency) {
+        sausage::Rack rack;
+        sausage::RackSettings settings;
+        settings.algorithm = mode;
+        settings.sausageOn = false;
+        settings.spaceOn = false;
+        settings.riseOn = false;
+        settings.width = 1.0f;
+        settings.spread = 0.75f;
+        rack.setSettings(settings);
+        rack.prepare(48000.0);
+        constexpr int total = 24000;
+        std::vector<float> left(total), right(total);
+        std::ranges::for_each(std::views::iota(0, total), [&](int i) {
+            const float s = 0.25f * std::sin(2.0f * std::numbers::pi_v<float> * frequency * static_cast<float>(i) / 48000.0f);
+            left[static_cast<std::size_t>(i)] = s;
+            right[static_cast<std::size_t>(i)] = s;
+        });
+        rack.process(left.data(), right.data(), total);
+        double midSq = 0.0, sideSq = 0.0;
+        std::ranges::for_each(std::views::iota(12000, total), [&](int i) {
+            const float l = left[static_cast<std::size_t>(i)];
+            const float r = right[static_cast<std::size_t>(i)];
+            const float mid = 0.5f * (l + r);
+            const float side = 0.5f * (l - r);
+            midSq += static_cast<double>(mid * mid);
+            sideSq += static_cast<double>(side * side);
+        });
+        return std::sqrt(sideSq / std::max(midSq, 1.0e-12));
+    };
+
+    REQUIRE(sideRatioAt(50.0f) < 0.12);
+    REQUIRE(sideRatioAt(400.0f) > 0.22);
+}
+
+TEST_CASE("Rack soft clipper uses antiderivative anti-aliasing at host sample rate") {
+    constexpr int size = 4096, fundamental = 997, alias = size - 3 * fundamental;
+    sausage::Rack rack;
+    sausage::RackSettings settings;
+    settings.sausageOn = false;
+    settings.spaceOn = false;
+    settings.riseOn = false;
+    settings.widthOn = false;
+    settings.outputDb = 12.0f;
+    settings.softClip = true;
+    rack.setSettings(settings);
+    rack.prepare(48000.0);
+
+    constexpr int total = size * 2 + sausage::Core::latency;
+    std::vector<float> left(total), right(total);
+    const float driveGain = std::pow(10.0f, 12.0f / 20.0f);
+    std::ranges::for_each(std::views::iota(0, total), [&](int i) {
+        const float s = 0.75f * std::sin(2.0f * std::numbers::pi_v<float> * static_cast<float>(fundamental * i) / static_cast<float>(size));
+        left[static_cast<std::size_t>(i)] = s;
+        right[static_cast<std::size_t>(i)] = s;
+    });
+    const auto dryInput = left;
+    rack.process(left.data(), right.data(), total);
+
+    std::complex<double> rackAlias {}, naiveAlias {};
+    std::ranges::for_each(std::views::iota(size, size * 2), [&](int k) {
+        const double basisAngle = -2.0 * std::numbers::pi * static_cast<double>(alias * k) / static_cast<double>(size);
+        const auto basis = std::polar(1.0, basisAngle);
+        const float outSample = left[static_cast<std::size_t>(k + sausage::Core::latency)];
+        const double rawClipped = std::tanh(static_cast<double>(dryInput[static_cast<std::size_t>(k)] * driveGain));
+        rackAlias += basis * static_cast<double>(outSample);
+        naiveAlias += basis * rawClipped;
+    });
+    REQUIRE(std::abs(naiveAlias) > 1.0);
+    REQUIRE(std::abs(rackAlias) < 0.35 * std::abs(naiveAlias));
+}
+
+TEST_CASE("Algorithm transition pre-warms next engine and crossfades equal-power without wet dropout") {
+    sausage::Rack rack;
+    sausage::RackSettings settings;
+    settings.algorithm = sausage::Algorithm::Classic;
+    settings.sausageOn = false;
+    settings.space = 1.0f;
+    settings.size = 0.85f;
+    rack.setSettings(settings);
+    rack.prepare(48000.0);
+
+    auto left = signal(36000), right = left;
+    rack.process(left.data(), right.data(), 24000);
+    settings.algorithm = sausage::Algorithm::Velvet;
+    rack.setSettings(settings);
+    rack.process(left.data() + 24000, right.data() + 24000, 12000);
+
+    double preSq = 0.0;
+    std::ranges::for_each(std::views::iota(19200, 24000), [&](int idx) {
+        const float v = left[static_cast<std::size_t>(idx)];
+        preSq += static_cast<double>(v * v);
+    });
+    const float preSwitchRms = static_cast<float>(std::sqrt(preSq / 4800.0));
+
+    constexpr int win = 480;
+    float minTransitionRms = 1.0e9f;
+    std::ranges::for_each(std::views::iota(50, 74), [&](int block) {
+        double sumSq = 0.0;
+        const int base = block * win;
+        std::ranges::for_each(std::views::iota(base, base + win), [&](int idx) {
+            const float v = left[static_cast<std::size_t>(idx)];
+            sumSq += static_cast<double>(v * v);
+        });
+        minTransitionRms = std::min(minTransitionRms, static_cast<float>(std::sqrt(sumSq / static_cast<double>(win))));
+    });
+    REQUIRE(preSwitchRms > 0.01f);
+    REQUIRE(minTransitionRms > 0.55f * preSwitchRms);
 }

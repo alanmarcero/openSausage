@@ -59,17 +59,22 @@ private:
     Core core;
     RackSettings target {}, smooth {};
     std::array<Delay, 8> combs;
-    std::array<float, 8> damp {};
+    std::array<float, 8> fdnLp {}, fdnLow {}, fdnPhase {};
     std::array<std::array<Delay, 4>, 2> diffusers;
     std::array<Delay, 2> pitch, widen;
-    Delay spacePreDelay;
+    std::array<Delay, 2> spacePreDelay;
+    std::array<std::array<Delay, 4>, 2> widthDiffusers;
     std::array<std::array<float, Core::latency>, 2> dry {};
     double rate = 48000.0;
-    float smoothing = 0.0f, phase = 0.0f, active = 1.0f;
-    std::array<float, 2> highpass {}, previous {};
-    std::array<float, 4> grainPhases {0.0f, 0.25f, 0.5f, 0.75f};
-    std::array<std::array<float, 4>, 2> widthAllpass {};
-    float widthLow = 0.0f, widthPhase = 0.0f, widthPole = 0.0f;
+    float smoothing = 0.0f, active = 1.0f;
+    std::array<float, 2> riseReadAge {}, riseFadeAge {};
+    std::array<int, 2> riseFadeRemaining {}, riseFadeTotal {}, risePeriod {};
+    std::array<float, 2> riseFbHpIc1 {}, riseFbHpIc2 {}, riseFbLpIc1 {}, riseFbLpIc2 {};
+    float riseFbHpA1 = 0.0f, riseFbHpA2 = 0.0f, riseFbHpA3 = 0.0f;
+    float riseFbLpA1 = 0.0f, riseFbLpA2 = 0.0f, riseFbLpA3 = 0.0f;
+    std::array<double, 2> clipPrevX {}, clipPrevIntegral {};
+    float widthHpA1 = 0.0f, widthHpA2 = 0.0f, widthHpA3 = 0.0f, widthHpIc1 = 0.0f, widthHpIc2 = 0.0f;
+    float widthLow = 0.0f, widthPole = 0.0f, widthPhase = 0.0f;
     int dryPosition = 0;
     bool spaceCleared = true, riseCleared = true, widthCleared = true;
 };
@@ -86,6 +91,6 @@ private:
     std::array<Algorithm, 2> algorithms {};
     RackSettings target {};
     std::size_t current = 0;
-    int transition = 0, fadeSamples = 960;
+    int transition = 0, fadeSamples = 960, warmup = 0, warmupSamples = 2400;
 };
 }
