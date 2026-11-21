@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "BinaryData.h"
+#include <ranges>
 
 namespace {
 const juce::Colour ink(0xffe6f0f5), cream(0xffe6f0f5), panel(0xf2152026);
@@ -23,17 +24,41 @@ void dial(juce::Slider& slider, const juce::String& id, juce::Colour accent) {
     slider.setDoubleClickReturnValue(true, id == "size" || id == "spread" ? 50.0 : 0.0);
     slider.setWantsKeyboardFocus(true);
 }
-void meter(juce::Graphics& g, const juce::String& label, float peak, int x) {
-    const auto db = juce::Decibels::gainToDecibels(peak, -60.0f);
-    text(g, label, {x, 623, 90, 20}, 12.0f, cream, juce::Font::bold);
-    text(g, db <= -60.0f ? "-inf dB" : juce::String(db, 1) + " dB", {x + 76, 623, 84, 20}, 12.0f, cream, juce::Font::plain, juce::Justification::centredRight);
-    for (int segment = 0; segment < 23; ++segment) {
-        const bool lit = db > -60.0f + static_cast<float>(segment) * 60.0f / 23.0f;
-        const auto color = segment > 20 ? juce::Colour(0xffffbe3b) : juce::Colour(0xff48f0c8);
-        g.setColour(lit ? color : juce::Colour(0xff313f42));
-        g.fillRoundedRectangle(static_cast<float>(x + segment * 7), 651.0f, 5.0f, 15.0f, 1.0f);
-    }
 }
+LevelMeter::LevelMeter(juce::String name) : label(std::move(name)) {}
+void LevelMeter::push(float peak, double nowMs) {
+    const auto before = std::tuple(level, held, clipped);
+    level = peak;
+    if (peak >= held || nowMs - heldAt >= 1000.0) {
+        held = peak;
+        heldAt = nowMs;
+    }
+    clipped = clipped || peak > 1.0f;
+    if (std::tuple(level, held, clipped) != before) repaint();
+}
+void LevelMeter::paint(juce::Graphics& g) {
+    const auto heldDb = juce::Decibels::gainToDecibels(held, -60.0f);
+    text(g, label, {0, 0, 90, 18}, 12.0f, cream, juce::Font::bold);
+    auto readout = juce::String("-inf");
+    if (heldDb > -60.0f) readout = (heldDb > 0.0f ? "+" : "") + juce::String(heldDb, 1);
+    text(g, readout + " dBFS", {60, 0, 100, 18}, 12.0f, cream, juce::Font::plain, juce::Justification::centredRight);
+    // 22 segments span -60 to 0 dBFS. The segment of the held peak stays lit.
+    const auto topSegment = [](float gain) {
+        return std::min(21, static_cast<int>(std::ceil((juce::Decibels::gainToDecibels(gain, -60.0f) + 60.0f) * 22.0f / 60.0f)) - 1);
+    };
+    const int levelTop = topSegment(level), heldTop = topSegment(held);
+    std::ranges::for_each(std::views::iota(0, 22), [&](int segment) {
+        const bool lit = segment <= levelTop || segment == heldTop;
+        const auto litColour = segment >= 20 ? 0xffffbe3b : 0xff48f0c8;
+        g.setColour(juce::Colour(lit ? litColour : 0xff313f42));
+        g.fillRoundedRectangle(static_cast<float>(segment * 7), 26.0f, 5.0f, 16.0f, 1.0f);
+    });
+    g.setColour(juce::Colour(clipped ? 0xffff4d4d : 0xff313f42));
+    g.fillRoundedRectangle(154.0f, 26.0f, 5.0f, 16.0f, 1.0f);
+}
+void LevelMeter::mouseDown(const juce::MouseEvent&) {
+    clipped = false;
+    repaint();
 }
 ModulePanel::ModulePanel(juce::AudioProcessorValueTreeState& state, const juce::String& name, const juce::String& sub,
                          const juce::String& primaryId, const juce::String& primaryName, const juce::String& secondaryId,
@@ -207,6 +232,10 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     dial(output, "output", juce::Colour(0xffffbe3b));
     output.setTooltip("Wet trim: level of the processed signal before Soft Clip and Rack mix. It has no effect at Rack mix 0%. Master bypass skips it.");
     output.setColour(juce::Slider::textBoxTextColourId, cream);
+    inputMeter.setComponentID("inputMeter");
+    outputMeter.setComponentID("outputMeter");
+    inputMeter.setTooltip("Input peak in dBFS, held for 1 s. The red light latches above 0 dBFS; click to clear it.");
+    outputMeter.setTooltip("Output peak in dBFS, held for 1 s. The red light latches above 0 dBFS; click to clear it.");
     dial(masterMix, "masterMix", juce::Colour(0xff48f0c8));
     masterMix.setDoubleClickReturnValue(true, 100.0);
     masterMix.setTooltip("Global dry/wet parallel rack blend (0% dry to 100% wet).");
@@ -219,7 +248,7 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     for (int i = 0; i < 4; ++i) algorithms.addItem(sausage::algorithmNames[i], i + 1);
     algorithms.setTooltip("One algorithm set for all four effects. Classic is the original set. Velvet uses atan and a hall. Punch uses clipping and a short room. Prism uses wavefolding and a brighter hall. Knob settings stay put.");
     algorithmAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(owner.parameters, "algorithm", algorithms);
-    for (auto* child : std::initializer_list<juce::Component*> {&output, &masterMix, &softClip, &bypass, &algorithms, &suite, &suite.presetRow})
+    for (auto* child : std::initializer_list<juce::Component*> {&output, &masterMix, &inputMeter, &outputMeter, &softClip, &bypass, &algorithms, &suite, &suite.presetRow})
         content.addAndMakeVisible(child);
     setWantsKeyboardFocus(true);
     // Read the saved width first: the resize limits below call resized(), which stores the width.
@@ -251,7 +280,10 @@ void SausageEditor::timerCallback() {
     suite.refresh();
     for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) p->setBeatPhase(animationPhase());
     content.repaint(20, 4, 175, 160);
-    content.repaint(24, 615, 845, 65);
+    const auto now = juce::Time::getMillisecondCounterHiRes();
+    inputMeter.push(ownerProcessor.inputPeak.exchange(0.0f), now);
+    outputMeter.push(ownerProcessor.outputPeak.exchange(0.0f), now);
+    content.repaint(738, 646, 126, 28);
 }
 void SausageEditor::paint(juce::Graphics& g) { g.fillAll(juce::Colour(0xff0d1317)); }
 void SausageEditor::paintContent(juce::Graphics& g) {
@@ -277,8 +309,6 @@ void SausageEditor::paintContent(juce::Graphics& g) {
     text(g, "ALAN MARCERO", {930, 31, 196, 24}, 15.0f, ink, juce::Font::bold, juce::Justification::centredRight);
     g.setColour(juce::Colour(0xf00c1418)); g.fillRect(0, 609, designWidth, designHeight - 609);
     g.setColour(juce::Colour(0xff48f0c8).withAlpha(0.4f)); g.drawHorizontalLine(609, 24, 1136);
-    meter(g, "INPUT", ownerProcessor.inputPeak.load(std::memory_order_relaxed), 30);
-    meter(g, "OUTPUT", ownerProcessor.outputPeak.load(std::memory_order_relaxed), 214);
     text(g, "Wet trim", {390, 638, 66, 22}, 13.0f, cream, juce::Font::bold);
     text(g, "Rack mix", {562, 638, 74, 22}, 13.0f, cream, juce::Font::bold);
     text(g, "Compression", {738, 623, 126, 22}, 13.0f, cream, juce::Font::bold);
@@ -296,6 +326,7 @@ void SausageEditor::resized() {
     risePanel.setBounds(588, 172, 266, 415); widthPanel.setBounds(870, 172, 266, 415);
     output.setBounds(456, 611, 96, 74); masterMix.setBounds(632, 611, 96, 74);
     softClip.setBounds(864, 633, 112, 36); bypass.setBounds(986, 633, 146, 36);
+    inputMeter.setBounds(30, 628, 160, 44); outputMeter.setBounds(214, 628, 160, 44);
     algorithms.setBounds(532, 104, 158, 36);
     suite.setBounds(0, 716, 1160, 44);
     suite.presetRow.setBounds(706, 102, 426, 66);

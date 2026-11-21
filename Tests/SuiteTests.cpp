@@ -386,6 +386,32 @@ int runOpenSausageSuiteTests() {
         require(clearOfCorner(), "The resize corner covers a suite bar control at 150%");
     }
 
+    SausageProcessor peaks;
+    peaks.prepareToPlay(48000, 64);
+    juce::AudioBuffer<float> loud(2, 64), quiet(2, 64);
+    loud.clear();
+    quiet.clear();
+    loud.setSample(0, 10, 0.9f);
+    quiet.setSample(0, 10, 0.1f);
+    juce::MidiBuffer noMidi;
+    peaks.processBlock(loud, noMidi);
+    peaks.processBlock(quiet, noMidi);
+    require(std::abs(peaks.inputPeak.exchange(0.0f) - 0.9f) < 1.0e-6f, "Input meter missed a peak between reads");
+    require(juce::approximatelyEqual(peaks.inputPeak.load(), 0.0f), "Reading the input meter did not reset it");
+    LevelMeter meter("INPUT");
+    meter.push(0.5f, 0.0);
+    meter.push(0.1f, 500.0);
+    require(juce::approximatelyEqual(meter.heldPeak(), 0.5f), "Peak hold dropped before 1 s");
+    meter.push(0.1f, 1100.0);
+    require(juce::approximatelyEqual(meter.heldPeak(), 0.1f), "Peak hold lasted past 1 s");
+    meter.push(1.2f, 1200.0);
+    meter.push(0.1f, 5000.0);
+    require(meter.isClipped(), "Clip light did not latch above 0 dBFS");
+    const auto now = juce::Time::getCurrentTime();
+    meter.mouseDown(juce::MouseEvent(juce::Desktop::getInstance().getMainMouseSource(), {}, {}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                     &meter, &meter, now, {}, now, 1, false));
+    require(!meter.isClipped(), "A click did not clear the clip light");
+
     SausageProcessor visuals;
     {
         std::unique_ptr<juce::AudioProcessorEditor> editor(visuals.createEditor());
