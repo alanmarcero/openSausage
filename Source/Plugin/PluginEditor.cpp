@@ -164,6 +164,17 @@ void ModulePanel::paint(juce::Graphics& g) {
         g.drawLine(142.0f, 396.0f, 232.0f, 396.0f, 0.7f);
     }
 }
+void ModulePanel::setBeatPhase(float position) {
+    const bool bypassed = moduleBypass->load() > 0.5f || masterBypass->load() > 0.5f;
+    const auto value = bypassed ? 0.0f : amount->load();
+    const std::array<float, 2> header {algorithm->load(), value > 0.0f ? 1.0f : 0.0f};
+    const std::array<float, 3> display {value, detail->load(), position * value};
+    if (header != shownHeader) repaint(20, 57, 232, 22);
+    if (display != shownDisplay) repaint(130, 378, 122, 34);
+    shownHeader = header;
+    shownDisplay = display;
+    phase = position;
+}
 void ModulePanel::resized() {
     bypass.setBounds(154, 20, 94, 36);
     if (kind == 0) {

@@ -1,4 +1,4 @@
-#include "PluginProcessor.h"
+#include "PluginEditor.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <cmath>
 #include <stdexcept>
@@ -12,6 +12,16 @@ void setDenormalised(SausageProcessor& processor, const char* id, float value) {
     parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
     parameter->endChangeGesture();
 }
+// Records the areas a component asks to repaint. Without a window, repaints are otherwise lost.
+struct RepaintSpy final : juce::CachedComponentImage {
+    explicit RepaintSpy(juce::Component& target) : owner(target) {}
+    void paint(juce::Graphics& g) override { owner.paintEntireComponent(g, false); }
+    bool invalidateAll() override { dirty = owner.getLocalBounds(); return true; }
+    bool invalidate(const juce::Rectangle<int>& area) override { dirty = dirty.getUnion(area); return true; }
+    void releaseResources() override {}
+    juce::Component& owner;
+    juce::Rectangle<int> dirty;
+};
 float storedValue(const PresetLibrary& library, const juce::String& preset, const char* id) {
     const auto tree = library.loadUser(preset);
     if (!tree) return -1.0f;
@@ -231,6 +241,35 @@ int runOpenSausageSuiteTests() {
         require(!barFolder.getChildFile("My Bass.preset").existsAsFile(), "The second Delete click did not remove the preset");
     }
     barFolder.deleteRecursively();
+
+    SausageProcessor visuals;
+    {
+        std::unique_ptr<juce::AudioProcessorEditor> editor(visuals.createEditor());
+        auto* panel = dynamic_cast<ModulePanel*>(find(*editor, "fatness")->getParentComponent());
+        require(panel != nullptr, "Sausage panel missing");
+        auto* spy = new RepaintSpy(*panel);
+        panel->setCachedComponentImage(spy);
+        panel->setBeatPhase(0.25f);
+        spy->dirty = {};
+        panel->setBeatPhase(0.25f);
+        require(spy->dirty.isEmpty(), "Panel repainted although nothing changed");
+        setDenormalised(visuals, "algorithm", 1.0f);
+        spy->dirty = {};
+        panel->setBeatPhase(0.25f);
+        require(spy->dirty.contains(juce::Rectangle<int>(20, 57, 210, 22)), "Subtitle did not repaint after the algorithm changed");
+        setDenormalised(visuals, "fatness", 50.0f);
+        panel->setBeatPhase(0.25f);
+        setDenormalised(visuals, "sausageBypass", 1.0f);
+        spy->dirty = {};
+        panel->setBeatPhase(0.25f);
+        require(spy->dirty.contains(juce::Rectangle<int>(238, 62, 10, 10)), "LED did not repaint after the module was bypassed");
+        setDenormalised(visuals, "sausageBypass", 0.0f);
+        panel->setBeatPhase(0.25f);
+        spy->dirty = {};
+        panel->setBeatPhase(0.5f);
+        require(spy->dirty.contains(juce::Rectangle<int>(132, 384, 104, 24)), "Beat display did not repaint when the beat moved");
+        panel->setCachedComponentImage(nullptr);
+    }
 
     SausageProcessor pitch;
     setDenormalised(pitch, "rise", 100.0f);
