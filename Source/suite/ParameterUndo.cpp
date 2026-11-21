@@ -27,15 +27,19 @@ ParameterUndo::ParameterUndo(juce::AudioProcessor& audioProcessor) : processor(a
 ParameterUndo::~ParameterUndo() {
     for (auto* parameter : processor.getParameters()) parameter->removeListener(this);
 }
-void ParameterUndo::undo() { if (messageThread()) manager.undo(); }
-void ParameterUndo::redo() { if (messageThread()) manager.redo(); }
-bool ParameterUndo::canUndo() const { return manager.canUndo(); }
-bool ParameterUndo::canRedo() const { return manager.canRedo(); }
-void ParameterUndo::clear() { if (messageThread()) manager.clearUndoHistory(); }
+void ParameterUndo::undo() { if (messageThread()) manager->undo(); }
+void ParameterUndo::redo() { if (messageThread()) manager->redo(); }
+bool ParameterUndo::canUndo() const { return manager->canUndo(); }
+bool ParameterUndo::canRedo() const { return manager->canRedo(); }
+void ParameterUndo::clear() {
+    if (messageThread()) std::ranges::for_each(histories, [](juce::UndoManager& history) { history.clearUndoHistory(); });
+}
+void ParameterUndo::selectHistory(int slot) { manager = &histories[slot == 1 ? 1 : 0]; }
+void ParameterUndo::clearHistory(int slot) { if (messageThread()) histories[slot == 1 ? 1 : 0].clearUndoHistory(); }
 bool ParameterUndo::beginGroup(const juce::String& name) {
     if (!messageThread()) return false;
     if (groupDepth++ == 0) {
-        manager.beginNewTransaction(name);
+        manager->beginNewTransaction(name);
         grouped.clear();
     }
     return true;
@@ -48,7 +52,7 @@ void ParameterUndo::endGroup() {
 }
 void ParameterUndo::perform(juce::UndoableAction* action) {
     if (!messageThread()) { delete action; return; }
-    manager.perform(action);
+    manager->perform(action);
 }
 bool ParameterUndo::messageThread() const noexcept {
     return juce::MessageManager::existsAndIsCurrentThread();
@@ -70,8 +74,8 @@ std::vector<ParameterUndo::Change> ParameterUndo::coalesce(std::vector<Change> c
 void ParameterUndo::commit(std::vector<Change> changes, bool startTransaction) {
     changes = coalesce(std::move(changes));
     if (changes.empty()) return;
-    if (startTransaction) manager.beginNewTransaction();
-    manager.perform(new Action(*this, std::move(changes)));
+    if (startTransaction) manager->beginNewTransaction();
+    manager->perform(new Action(*this, std::move(changes)));
 }
 void ParameterUndo::apply(const std::vector<Change>& changes, bool useTo) {
     const juce::ScopedValueSetter<bool> guard(applying, true);
@@ -103,7 +107,7 @@ void ParameterUndo::parameterGestureChanged(int index, bool starting) {
         if (gesture[slot]) return;
         gesture[slot] = true;
         gestureFrom[slot] = processor.getParameters()[index]->getValue();
-        if (groupDepth == 0 && openGestures == 0) manager.beginNewTransaction();
+        if (groupDepth == 0 && openGestures == 0) manager->beginNewTransaction();
         ++openGestures;
         return;
     }

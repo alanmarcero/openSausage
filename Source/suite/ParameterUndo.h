@@ -1,5 +1,6 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <array>
 #include <atomic>
 #include <vector>
 
@@ -18,6 +19,9 @@ public:
     bool canUndo() const;
     bool canRedo() const;
     void clear();
+    // Each A/B slot keeps its own history.
+    void selectHistory(int slot);
+    void clearHistory(int slot);
     // Returns false when called off the message thread; nothing is recorded then.
     bool beginGroup(const juce::String& name);
     void endGroup();
@@ -46,7 +50,8 @@ private:
     static std::vector<Change> coalesce(std::vector<Change> changes);
 
     juce::AudioProcessor& processor;
-    juce::UndoManager manager;
+    std::array<juce::UndoManager, 2> histories;
+    juce::UndoManager* manager = &histories[0];
     std::vector<float> last;
     std::vector<float> gestureFrom;
     std::vector<bool> gesture;
