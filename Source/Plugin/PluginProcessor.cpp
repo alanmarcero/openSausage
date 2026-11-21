@@ -133,8 +133,10 @@ void SausageProcessor::process(juce::AudioBuffer<float>& buffer, bool hostBypass
     rack.process(buffer.getWritePointer(0), getTotalNumInputChannels() > 1 ? buffer.getWritePointer(1) : nullptr, buffer.getNumSamples());
     float output = 0.0f;
     for (int channel = 0; channel < getTotalNumInputChannels(); ++channel) output = juce::jmax(output, buffer.getMagnitude(channel, 0, buffer.getNumSamples()));
-    inputPeak.store(input, std::memory_order_relaxed);
-    outputPeak.store(output, std::memory_order_relaxed);
+    std::ranges::for_each(std::array {std::pair {&inputPeak, input}, std::pair {&outputPeak, output}}, [](const auto& meter) {
+        auto held = meter.first->load(std::memory_order_relaxed);
+        while (meter.second > held && !meter.first->compare_exchange_weak(held, meter.second, std::memory_order_relaxed)) {}
+    });
     gainReduction.store(hostBypassed || values[13]->load() > 0.5f || values[9]->load() > 0.5f ? 0.0f : std::max(0.0f, rack.reductionDb()), std::memory_order_relaxed);
 }
 void SausageProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) { process(buffer, false); }

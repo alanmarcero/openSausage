@@ -45,7 +45,9 @@ public:
     ABCompare compare;
     PresetLibrary presets;
     std::atomic<float> beatPhase {-1.0f};
-    std::atomic<float> inputPeak {0.0f}, outputPeak {0.0f}, gainReduction {0.0f};
+    // Peaks since the editor last read them with exchange().
+    std::atomic<float> inputPeak {0.0f}, outputPeak {0.0f};
+    std::atomic<float> gainReduction {0.0f};
     // The last editor width. 0 opens the editor at its design size.
     std::atomic<int> editorWidth {0};
 private:

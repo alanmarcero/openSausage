@@ -1,4 +1,4 @@
-#include "PluginProcessor.h"
+#include "PluginEditor.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <iostream>
 #include <stdexcept>
@@ -223,6 +223,8 @@ int main(int argc, char** argv) {
             }
             processor.processBlock(buffer, midi);
         }
+        dynamic_cast<LevelMeter*>(find(*editor, "inputMeter"))->push(processor.inputPeak.exchange(0.0f), 0.0);
+        dynamic_cast<LevelMeter*>(find(*editor, "outputMeter"))->push(processor.outputPeak.exchange(0.0f), 0.0);
         save(*editor, output, "openSausage-lift-off.png");
         for (const auto* id : {"sausageBypass", "spaceBypass", "riseBypass", "widthBypass"})
             dynamic_cast<juce::TextButton*>(find(*editor, id))->setToggleState(true, juce::sendNotificationSync);

@@ -33,6 +33,22 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> focusAttachment, riseLengthAttachment;
 };
 
+// A peak meter in dBFS with a 1 s peak hold and a clip light that latches above 0 dBFS.
+class LevelMeter final : public juce::Component, public juce::SettableTooltipClient {
+public:
+    explicit LevelMeter(juce::String label);
+    void push(float peak, double nowMs);
+    void paint(juce::Graphics&) override;
+    void mouseDown(const juce::MouseEvent&) override;
+    float heldPeak() const noexcept { return held; }
+    bool isClipped() const noexcept { return clipped; }
+private:
+    juce::String label;
+    float level = 0.0f, held = 0.0f;
+    double heldAt = 0.0;
+    bool clipped = false;
+};
+
 class SausageEditor final : public juce::AudioProcessorEditor, private juce::Timer {
 public:
     explicit SausageEditor(SausageProcessor&);
@@ -57,6 +73,7 @@ private:
     float animationPhase() const noexcept;
     ModulePanel sausagePanel, spacePanel, risePanel, widthPanel;
     juce::Slider output, masterMix;
+    LevelMeter inputMeter {"INPUT"}, outputMeter {"OUTPUT"};
     juce::TextButton bypass, softClip{"Soft Clip"};
     juce::ComboBox algorithms;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> algorithmAttachment;
