@@ -25,9 +25,14 @@ void SausageLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int w
     const auto radius = diameter * 0.5f;
     const auto angle = start + position * (end - start);
     const auto accent = slider.findColour(juce::Slider::rotarySliderFillColourId);
+    // A range that spans zero, such as a gain, lights the ticks from 0 to the value.
+    const bool spansZero = slider.getMinimum() < 0.0 && slider.getMaximum() > 0.0;
+    const auto origin = spansZero ? static_cast<float>(slider.valueToProportionOfLength(0.0)) : 0.0f;
+    const auto lowest = static_cast<int>(std::ceil(std::min(origin, position) * 20.0f));
+    const auto highest = static_cast<int>(std::max(origin, position) * 20.0f);
     for (int tick = 0; tick <= 20; ++tick) {
         const auto a = start + static_cast<float>(tick) / 20.0f * (end - start);
-        g.setColour(tick <= static_cast<int>(position * 20.0f) ? accent : juce::Colour(0xff536266));
+        g.setColour(tick >= lowest && tick <= highest ? accent : juce::Colour(0xff536266));
         const juce::Point<float> p {std::sin(a), -std::cos(a)};
         g.drawLine({center + p * (radius + 6.0f), center + p * (radius + 10.0f)}, 1.7f);
     }

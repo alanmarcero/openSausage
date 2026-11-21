@@ -369,6 +369,10 @@ int runOpenSausageSuiteTests() {
             const auto* button = dynamic_cast<juce::TextButton*>(component);
             return button != nullptr && button->isVisible() && button->getHeight() < 36;
         }), "A button is shorter than 36 px");
+        require(std::ranges::none_of(all, [](juce::Component* component) {
+            const auto* knob = dynamic_cast<juce::Slider*>(component);
+            return knob != nullptr && knob->isRotary() && std::min(knob->getWidth(), knob->getHeight() - knob->getTextBoxHeight()) - 26 < 46;
+        }), "A knob face is smaller than 46 px");
         const std::array<juce::Component*, 3> icons {find(*editor, "suitePrevious"), find(*editor, "suiteNext"), find(*editor, "suiteFavorite")};
         require(std::ranges::all_of(icons, [](juce::Component* icon) { return icon->getWidth() >= 40 && icon->getHeight() >= 40; }),
             "An icon button is smaller than 40x40");

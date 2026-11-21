@@ -238,7 +238,7 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     outputMeter.setTooltip("Output peak in dBFS, held for 1 s. The red light latches above 0 dBFS; click to clear it.");
     dial(masterMix, "masterMix", juce::Colour(0xff48f0c8));
     masterMix.setDoubleClickReturnValue(true, 100.0);
-    masterMix.setTooltip("Global dry/wet parallel rack blend (0% dry to 100% wet).");
+    masterMix.setTooltip("Rack mix: blend of the dry input and the processed rack. 0% is dry, 100% is fully processed.");
     masterMix.setColour(juce::Slider::textBoxTextColourId, cream);
     softClip.setComponentID("softClip"); softClip.setName("Soft Clip"); softClip.setClickingTogglesState(true);
     softClip.setTooltip("Anti-aliased post-rack soft clipper ceiling so aggressive builds never exceed 0 dBFS.");
@@ -307,10 +307,10 @@ void SausageEditor::paintContent(juce::Graphics& g) {
     text(g, "Algorithm", {532, 81, 145, 20}, 14.0f, ink, juce::Font::bold);
     text(g, "Preset", {706, 81, 412, 20}, 14.0f, ink, juce::Font::bold);
     text(g, "ALAN MARCERO", {930, 31, 196, 24}, 15.0f, ink, juce::Font::bold, juce::Justification::centredRight);
-    g.setColour(juce::Colour(0xf00c1418)); g.fillRect(0, 609, designWidth, designHeight - 609);
-    g.setColour(juce::Colour(0xff48f0c8).withAlpha(0.4f)); g.drawHorizontalLine(609, 24, 1136);
-    text(g, "Wet trim", {390, 638, 66, 22}, 13.0f, cream, juce::Font::bold);
-    text(g, "Rack mix", {562, 638, 74, 22}, 13.0f, cream, juce::Font::bold);
+    g.setColour(juce::Colour(0xf00c1418)); g.fillRect(0, 596, designWidth, designHeight - 596);
+    g.setColour(juce::Colour(0xff48f0c8).withAlpha(0.4f)); g.drawHorizontalLine(596, 24, 1136);
+    text(g, "Wet trim", output.getBounds().withY(output.getY() - 20).withHeight(18), 13.0f, cream, juce::Font::bold, juce::Justification::centred);
+    text(g, "Rack mix", masterMix.getBounds().withY(masterMix.getY() - 20).withHeight(18), 13.0f, cream, juce::Font::bold, juce::Justification::centred);
     text(g, "Compression", {738, 623, 126, 22}, 13.0f, cream, juce::Font::bold);
     text(g, juce::String(ownerProcessor.gainReduction.load(std::memory_order_relaxed), 1) + " dB", {738, 646, 126, 28}, 21.0f, juce::Colour(0xffffbe3b), juce::Font::bold);
     g.setColour(juce::Colour(0xff3b474a)); g.drawHorizontalLine(715, 24, 1136);
@@ -324,7 +324,7 @@ void SausageEditor::resized() {
     ownerProcessor.editorWidth = getWidth();
     sausagePanel.setBounds(24, 172, 266, 415); spacePanel.setBounds(306, 172, 266, 415);
     risePanel.setBounds(588, 172, 266, 415); widthPanel.setBounds(870, 172, 266, 415);
-    output.setBounds(456, 611, 96, 74); masterMix.setBounds(632, 611, 96, 74);
+    output.setBounds(400, 618, 100, 96); masterMix.setBounds(520, 618, 100, 96);
     softClip.setBounds(864, 633, 112, 36); bypass.setBounds(986, 633, 146, 36);
     inputMeter.setBounds(30, 628, 160, 44); outputMeter.setBounds(214, 628, 160, 44);
     algorithms.setBounds(532, 104, 158, 36);
