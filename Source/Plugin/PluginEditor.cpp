@@ -257,7 +257,7 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     algorithms.setTooltip("One algorithm set for all four effects. Classic is the original set. Velvet uses atan and a hall. Punch uses clipping and a short room. Prism uses wavefolding and a brighter hall. Knob settings stay put.");
     algorithmAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(owner.parameters, "algorithm", algorithms);
     addAndMakeVisible(output); addAndMakeVisible(masterMix); addAndMakeVisible(softClip); addAndMakeVisible(bypass); addAndMakeVisible(recipes); addAndMakeVisible(algorithms);
-    addAndMakeVisible(prevRecipe); addAndMakeVisible(nextRecipe); addAndMakeVisible(suite);
+    addAndMakeVisible(prevRecipe); addAndMakeVisible(nextRecipe); addAndMakeVisible(suite); addAndMakeVisible(suite.presetRow);
     setWantsKeyboardFocus(true);
     setResizable(true, true);
     setResizeLimits(1160, 720, 1740, 1080);
@@ -339,7 +339,8 @@ void SausageEditor::resized() {
     nextRecipe.setBounds(1028, 104, 90, 36);
     algorithms.setBounds(532, 104, 158, 36);
     suite.setBounds(0, 688, 1160, 32);
+    suite.presetRow.setBounds(706, 146, 426, 20);
     const auto transform = juce::AffineTransform::scale(static_cast<float>(getWidth()) / 1160.0f);
-    std::ranges::for_each(std::initializer_list<juce::Component*> {&sausagePanel, &spacePanel, &risePanel, &widthPanel, &output, &masterMix, &softClip, &bypass, &recipes, &algorithms, &prevRecipe, &nextRecipe, &suite},
+    std::ranges::for_each(std::initializer_list<juce::Component*> {&sausagePanel, &spacePanel, &risePanel, &widthPanel, &output, &masterMix, &softClip, &bypass, &recipes, &algorithms, &prevRecipe, &nextRecipe, &suite, &suite.presetRow},
                           [transform](juce::Component* child) { child->setTransform(transform); });
 }
