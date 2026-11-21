@@ -116,27 +116,22 @@ void ModulePanel::paint(juce::Graphics& g) {
         g.drawEllipse(238.0f, 62.0f, 10.0f, 10.0f, 1.2f);
     }
     g.setColour(juce::Colour(0xff3b4649)); g.drawHorizontalLine(88, 20.0f, 246.0f);
-    if (kind != 0)
-        text(g, primaryLabel.toUpperCase(), {20, 101, 226, 20}, 12.0f, ink, juce::Font::bold, juce::Justification::centred);
+    // Each caption is centred above its control.
+    const auto caption = [&g](const juce::String& label, const juce::Component& control) {
+        text(g, label, control.getBounds().withY(control.getY() - 20).withHeight(18), 12.0f, ink, juce::Font::bold, juce::Justification::centred);
+    };
+    caption(primaryLabel.toUpperCase(), primary);
+    caption(secondaryLabel.toUpperCase(), secondary);
     if (kind == 0) {
-        text(g, primaryLabel.toUpperCase(), {8, 102, 120, 18}, 11.0f, ink, juce::Font::bold, juce::Justification::centred);
-        text(g, "SATURATION MIX", {130, 102, 122, 18}, 10.0f, ink, juce::Font::bold, juce::Justification::centred);
-        text(g, "DYNAMICS", {130, 162, 122, 18}, 10.0f, ink, juce::Font::bold, juce::Justification::centred);
-        text(g, secondaryLabel.toUpperCase(), {8, 294, 116, 18}, 10.0f, ink, juce::Font::bold, juce::Justification::centred);
-        text(g, "SATURATION FOCUS", {130, 222, 122, 18}, 9.0f, ink, juce::Font::bold, juce::Justification::centred);
-        g.setFont(juce::FontOptions(10.5f)); g.setColour(juce::Colour(0xffa3afaf));
-        g.drawFittedText(hint, {130, 288, 122, 44}, juce::Justification::topLeft, 3);
-    } else if (kind == 1) {
-        text(g, secondaryLabel.toUpperCase(), {132, 304, 114, 18}, 11.0f, ink, juce::Font::bold);
-        text(g, "PRE-DELAY", {132, 326, 114, 16}, 10.0f, juce::Colour(0xffa3afaf), juce::Font::bold);
-    } else if (kind == 2) {
-        text(g, secondaryLabel.toUpperCase(), {132, 304, 114, 18}, 11.0f, ink, juce::Font::bold);
-        text(g, "LENGTH", {132, 326, 114, 16}, 10.0f, juce::Colour(0xffa3afaf), juce::Font::bold);
-    } else {
-        text(g, secondaryLabel.toUpperCase(), {132, 323, 114, 24}, 12.0f, ink, juce::Font::bold);
-        g.setFont(juce::FontOptions(12.0f)); g.setColour(juce::Colour(0xffa3afaf));
-        g.drawFittedText(hint, {132, 350, 112, 30}, juce::Justification::topLeft, 2);
+        caption("SATURATION MIX", saturationMix);
+        caption("DYNAMICS", dynamics);
+        caption("SATURATION FOCUS", focus);
     }
+    if (kind == 1) caption("PRE-DELAY", preDelay);
+    if (kind == 2) caption("LENGTH", riseLength);
+    g.setFont(juce::FontOptions(12.0f)); g.setColour(juce::Colour(0xffa3afaf));
+    if (kind == 0) g.drawFittedText(hint, {130, 288, 122, 44}, juce::Justification::topLeft, 3);
+    if (kind == 3) g.drawFittedText(hint, {132, 350, 112, 30}, juce::Justification::topLeft, 2);
     const auto value = moduleBypass->load() > 0.5f || masterBypass->load() > 0.5f ? 0.0f : amount->load() / 100.0f;
     const auto secondaryValue = detail->load() / 100.0f;
     const auto motion = phase * value;
@@ -173,7 +168,7 @@ void ModulePanel::resized() {
     bypass.setBounds(154, 20, 94, 36);
     if (kind == 0) {
         primary.setBounds(4, 118, 126, 166);
-        secondary.setBounds(10, 314, 108, 94);
+        secondary.setBounds(10, 314, 108, 96);
         saturationMix.setBounds(130, 122, 122, 36);
         dynamics.setBounds(130, 182, 122, 36);
         focus.setBounds(130, 244, 122, 36);
