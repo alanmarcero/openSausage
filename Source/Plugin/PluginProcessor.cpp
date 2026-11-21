@@ -147,6 +147,7 @@ const juce::String SausageProcessor::getProgramName(int index) {
 void SausageProcessor::getStateInformation(juce::MemoryBlock& destination) {
     auto state = parameters.copyState();
     state.setProperty("program", currentProgram, nullptr);
+    state.setProperty("editorWidth", editorWidth.load(), nullptr);
     compare.write(state);
     if (const auto xml = state.createXml()) copyXmlToBinary(*xml, destination);
 }
@@ -176,6 +177,7 @@ void SausageProcessor::setStateInformation(const void* data, int bytes) {
             }
             parameters.replaceState(state);
             currentProgram = program >= 0 && program < getNumPrograms() ? program : 0;
+            editorWidth = static_cast<int>(state.getProperty("editorWidth", 0));
             compare.install(slot, inactive);
             history.clear();
         }

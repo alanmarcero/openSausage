@@ -271,6 +271,29 @@ int runOpenSausageSuiteTests() {
     require(riseText->getText(1.0f, 0) == "+12.0 st", "Rise is not shown in semitones");
     require(riseText->getText(riseText->getValueForText("7 st"), 0) == "+7.0 st", "Rise does not accept semitones");
 
+    SausageProcessor sized;
+    {
+        std::unique_ptr<juce::AudioProcessorEditor> editor(sized.createEditor());
+        const auto designWidth = editor->getWidth(), designHeight = editor->getHeight();
+        const auto* limits = editor->getConstrainer();
+        require(limits->getMinimumWidth() == designWidth * 3 / 4 && limits->getMaximumWidth() == designWidth * 3 / 2
+                    && juce::approximatelyEqual(limits->getFixedAspectRatio(), static_cast<double>(designWidth) / designHeight),
+            "Editor does not resize from 75% to 150% at a fixed aspect ratio");
+        editor->setSize(designWidth * 3 / 4, designHeight * 3 / 4);
+        auto* algorithms = find(*editor, "algorithm");
+        const auto scaled = editor->getLocalArea(algorithms, algorithms->getLocalBounds());
+        require(std::abs(scaled.getWidth() - algorithms->getWidth() * 3 / 4) <= 1 && std::abs(scaled.getHeight() - algorithms->getHeight() * 3 / 4) <= 1,
+            "Editor content did not scale uniformly");
+        editor->setSize(designWidth * 6 / 5, designHeight * 6 / 5);
+        juce::MemoryBlock sizedState;
+        sized.getStateInformation(sizedState);
+        SausageProcessor reopened;
+        reopened.setStateInformation(sizedState.getData(), static_cast<int>(sizedState.getSize()));
+        std::unique_ptr<juce::AudioProcessorEditor> reopenedEditor(reopened.createEditor());
+        require(reopenedEditor->getWidth() == designWidth * 6 / 5 && reopenedEditor->getHeight() == designHeight * 6 / 5,
+            "Editor did not reopen at its saved size");
+    }
+
     SausageProcessor visuals;
     {
         std::unique_ptr<juce::AudioProcessorEditor> editor(visuals.createEditor());
