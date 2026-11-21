@@ -41,8 +41,16 @@ public:
     void resized() override;
     bool keyPressed(const juce::KeyPress&) override;
 private:
+    // Holds every control at the design size. The editor scales it uniformly.
+    struct Content final : juce::Component {
+        explicit Content(SausageEditor& owner) : editor(owner) {}
+        void paint(juce::Graphics& g) override { editor.paintContent(g); }
+        SausageEditor& editor;
+    };
     void timerCallback() override;
+    void paintContent(juce::Graphics&);
     SausageProcessor& ownerProcessor;
+    Content content {*this};
     SausageLookAndFeel look;
     std::unique_ptr<juce::Drawable> grill;
     juce::Image enamel;

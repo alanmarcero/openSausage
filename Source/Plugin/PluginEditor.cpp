@@ -3,6 +3,7 @@
 
 namespace {
 const juce::Colour ink(0xffe6f0f5), cream(0xffe6f0f5), panel(0xf2152026);
+constexpr int designWidth = 1160, designHeight = 720;
 void text(juce::Graphics& g, const juce::String& value, juce::Rectangle<int> box, float height,
           juce::Colour color = ink, int style = juce::Font::plain, juce::Justification align = juce::Justification::centredLeft) {
     g.setColour(color);
@@ -24,8 +25,8 @@ void dial(juce::Slider& slider, const juce::String& id, juce::Colour accent) {
 }
 void meter(juce::Graphics& g, const juce::String& label, float peak, int x) {
     const auto db = juce::Decibels::gainToDecibels(peak, -60.0f);
-    text(g, label, {x, 623, 90, 20}, 11.0f, cream, juce::Font::bold);
-    text(g, db <= -60.0f ? "-inf dB" : juce::String(db, 1) + " dB", {x + 76, 623, 84, 20}, 11.0f, cream, juce::Font::plain, juce::Justification::centredRight);
+    text(g, label, {x, 623, 90, 20}, 12.0f, cream, juce::Font::bold);
+    text(g, db <= -60.0f ? "-inf dB" : juce::String(db, 1) + " dB", {x + 76, 623, 84, 20}, 12.0f, cream, juce::Font::plain, juce::Justification::centredRight);
     for (int segment = 0; segment < 23; ++segment) {
         const bool lit = db > -60.0f + static_cast<float>(segment) * 60.0f / 23.0f;
         const auto color = segment > 20 ? juce::Colour(0xffffbe3b) : juce::Colour(0xff48f0c8);
@@ -200,7 +201,9 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
       suite(owner) {
     setLookAndFeel(&look);
     grill = juce::Drawable::createFromImageData(BinaryData::grill_svg, BinaryData::grill_svgSize);
-    for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) addAndMakeVisible(p);
+    addAndMakeVisible(content);
+    content.setBounds(0, 0, designWidth, designHeight);
+    for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) content.addAndMakeVisible(p);
     dial(output, "output", juce::Colour(0xffffbe3b));
     output.setTooltip("Wet trim: level of the processed signal before Soft Clip and Rack mix. It has no effect at Rack mix 0%. Master bypass skips it.");
     output.setColour(juce::Slider::textBoxTextColourId, cream);
@@ -260,13 +263,16 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     for (int i = 0; i < 4; ++i) algorithms.addItem(sausage::algorithmNames[i], i + 1);
     algorithms.setTooltip("One algorithm set for all four effects. Classic is the original set. Velvet uses atan and a hall. Punch uses clipping and a short room. Prism uses wavefolding and a brighter hall. Knob settings stay put.");
     algorithmAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(owner.parameters, "algorithm", algorithms);
-    addAndMakeVisible(output); addAndMakeVisible(masterMix); addAndMakeVisible(softClip); addAndMakeVisible(bypass); addAndMakeVisible(recipes); addAndMakeVisible(algorithms);
-    addAndMakeVisible(prevRecipe); addAndMakeVisible(nextRecipe); addAndMakeVisible(suite); addAndMakeVisible(suite.presetRow);
+    for (auto* child : std::initializer_list<juce::Component*> {&output, &masterMix, &softClip, &bypass, &recipes, &algorithms, &prevRecipe, &nextRecipe, &suite, &suite.presetRow})
+        content.addAndMakeVisible(child);
     setWantsKeyboardFocus(true);
+    // Read the saved width first: the resize limits below call resized(), which stores the width.
+    const int savedWidth = owner.editorWidth.load();
     setResizable(true, true);
-    setResizeLimits(1160, 720, 1740, 1080);
-    getConstrainer()->setFixedAspectRatio(1160.0 / 720.0);
-    setSize(1289, 800);
+    setResizeLimits(designWidth * 3 / 4, designHeight * 3 / 4, designWidth * 3 / 2, designHeight * 3 / 2);
+    getConstrainer()->setFixedAspectRatio(static_cast<double>(designWidth) / designHeight);
+    const int width = juce::jlimit(designWidth * 3 / 4, designWidth * 3 / 2, savedWidth > 0 ? savedWidth : designWidth);
+    setSize(width, width * designHeight / designWidth);
     startTimerHz(25);
 }
 SausageEditor::~SausageEditor() { stopTimer(); setLookAndFeel(nullptr); }
@@ -293,15 +299,14 @@ void SausageEditor::timerCallback() {
     }
     suite.refresh();
     for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) p->setBeatPhase(animationPhase());
-    const float scale = static_cast<float>(getWidth()) / 1160.0f;
-    repaint(juce::Rectangle<float>(20.0f * scale, 4.0f * scale, 175.0f * scale, 160.0f * scale).toNearestInt());
-    repaint(juce::Rectangle<float>(24.0f * scale, 615.0f * scale, 845.0f * scale, 65.0f * scale).toNearestInt());
+    content.repaint(20, 4, 175, 160);
+    content.repaint(24, 615, 845, 65);
 }
-void SausageEditor::paint(juce::Graphics& g) {
-    g.addTransform(juce::AffineTransform::scale(static_cast<float>(getWidth()) / 1160.0f));
+void SausageEditor::paint(juce::Graphics& g) { g.fillAll(juce::Colour(0xff0d1317)); }
+void SausageEditor::paintContent(juce::Graphics& g) {
     g.fillAll(juce::Colour(0xff0d1317));
-    g.drawImage(enamel, juce::Rectangle<float>(0, 0, 1160, 720), juce::RectanglePlacement::stretchToFit);
-    g.setColour(juce::Colour(0xff0d1317).withAlpha(0.95f)); g.fillRect(0, 0, 1160, 720);
+    g.drawImage(enamel, juce::Rectangle<float>(0, 0, designWidth, designHeight), juce::RectanglePlacement::stretchToFit);
+    g.setColour(juce::Colour(0xff0d1317).withAlpha(0.95f)); g.fillRect(0, 0, designWidth, designHeight);
     const bool sausageBypassed = ownerProcessor.parameters.getRawParameterValue("sausageBypass")->load() > 0.5f
                              || ownerProcessor.parameters.getRawParameterValue("bypass")->load() > 0.5f;
     const auto fat = sausageBypassed ? 0.0f : ownerProcessor.parameters.getRawParameterValue("fatness")->load() / 100.0f;
@@ -334,6 +339,8 @@ void SausageEditor::paint(juce::Graphics& g) {
     }
 }
 void SausageEditor::resized() {
+    content.setTransform(juce::AffineTransform::scale(static_cast<float>(getWidth()) / designWidth));
+    ownerProcessor.editorWidth = getWidth();
     sausagePanel.setBounds(24, 172, 266, 415); spacePanel.setBounds(306, 172, 266, 415);
     risePanel.setBounds(588, 172, 266, 415); widthPanel.setBounds(870, 172, 266, 415);
     output.setBounds(456, 611, 96, 74); masterMix.setBounds(632, 611, 96, 74);
@@ -344,7 +351,4 @@ void SausageEditor::resized() {
     algorithms.setBounds(532, 104, 158, 36);
     suite.setBounds(0, 688, 1160, 32);
     suite.presetRow.setBounds(706, 146, 426, 20);
-    const auto transform = juce::AffineTransform::scale(static_cast<float>(getWidth()) / 1160.0f);
-    std::ranges::for_each(std::initializer_list<juce::Component*> {&sausagePanel, &spacePanel, &risePanel, &widthPanel, &output, &masterMix, &softClip, &bypass, &recipes, &algorithms, &prevRecipe, &nextRecipe, &suite, &suite.presetRow},
-                          [transform](juce::Component* child) { child->setTransform(transform); });
 }
