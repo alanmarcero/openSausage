@@ -12,6 +12,8 @@ public:
     void resized() override;
     // Repaints the subtitle, LED, and beat display when what they show changed.
     void setBeatPhase(float position);
+    // Dims the controls whose setting has no effect right now.
+    void dimInactive();
 private:
     juce::String title, subtitle, primaryLabel, secondaryLabel, hint;
     juce::Colour accent;

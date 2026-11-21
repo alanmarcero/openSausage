@@ -416,6 +416,22 @@ int runOpenSausageSuiteTests() {
                                      &meter, &meter, now, {}, now, 1, false));
     require(!meter.isClipped(), "A click did not clear the clip light");
 
+    SausageProcessor effect;
+    {
+        std::unique_ptr<juce::AudioProcessorEditor> editor(effect.createEditor());
+        auto* spacePanel = dynamic_cast<ModulePanel*>(find(*editor, "space")->getParentComponent());
+        auto* size = dynamic_cast<juce::Slider*>(find(*editor, "size"));
+        spacePanel->dimInactive();
+        require(size->getAlpha() < 0.5f && size->isEnabled() && size->getTooltip().endsWith("Raise Mix to hear this."),
+            "Size did not show that it has no effect at Mix 0%");
+        setDenormalised(effect, "space", 40.0f);
+        spacePanel->dimInactive();
+        require(juce::approximatelyEqual(size->getAlpha(), 1.0f) && !size->getTooltip().contains("Raise"), "Size stayed dimmed after Mix went up");
+        setDenormalised(effect, "bypass", 1.0f);
+        spacePanel->dimInactive();
+        require(size->getAlpha() < 0.5f && size->getTooltip().endsWith("Turn off Master bypass to use this."), "Master bypass did not dim Size");
+    }
+
     SausageProcessor visuals;
     {
         std::unique_ptr<juce::AudioProcessorEditor> editor(visuals.createEditor());
