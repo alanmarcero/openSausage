@@ -28,7 +28,7 @@ private:
     void report(const juce::String& message, bool isError = false);
     const PresetLibrary::Entry* selected() const;
     SausageProcessor& processor;
-    juce::TextButton undo {"Undo"}, redo {"Redo"}, slotA {"A"}, slotB {"B"}, copyAToB {"A>B"}, copyBToA {"B>A"};
+    juce::TextButton undo {"Undo"}, redo {"Redo"}, slotA {"A"}, slotB {"B"}, copyAToB {"Copy A to B"}, copyBToA {"Copy B to A"};
     juce::TextButton save {"Save"}, renameButton {"Rename"}, deleteButton {"Delete"};
     juce::TextEditor search, name;
     std::vector<PresetLibrary::Entry> shown;

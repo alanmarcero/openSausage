@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
         require(find(*editor, "suiteUndo") && find(*editor, "suiteRedo") && find(*editor, "suiteA")
                     && find(*editor, "suiteB") && find(*editor, "presetSearch") && find(*editor, "presetBrowser"),
                 "Undo, A/B, or preset browser missing");
-        require(editor->getWidth() == 1160 && editor->getHeight() == 720, "Editor left its default size");
+        require(editor->getWidth() == 1160 && editor->getHeight() == 760, "Editor left its default size");
         save(*editor, output, "openSausage-clean.png");
         saturationMix->setValue(42.0, juce::sendNotificationSync);
         dynamics->setValue(37.0, juce::sendNotificationSync);
@@ -227,13 +227,13 @@ int main(int argc, char** argv) {
         for (const auto* id : {"sausageBypass", "spaceBypass", "riseBypass", "widthBypass"})
             dynamic_cast<juce::TextButton*>(find(*editor, id))->setToggleState(true, juce::sendNotificationSync);
         save(*editor, output, "openSausage-bypassed.png");
-        editor->setSize(870, 540);
+        editor->setSize(870, 570);
         for (auto* child : editor->getChildren())
             if (dynamic_cast<juce::ResizableCornerComponent*>(child))
                 require(std::abs(child->getBoundsInParent().getRight() - editor->getWidth()) <= 1,
                         "Resize handle moved away from the editor corner");
         save(*editor, output, "openSausage-compact.png");
-        editor->setSize(1740, 1080);
+        editor->setSize(1740, 1140);
         for (auto* child : editor->getChildren())
             if (dynamic_cast<juce::ResizableCornerComponent*>(child))
                 require(std::abs(child->getBoundsInParent().getRight() - editor->getWidth()) <= 1,

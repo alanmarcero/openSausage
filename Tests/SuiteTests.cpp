@@ -29,6 +29,23 @@ float storedValue(const PresetLibrary& library, const juce::String& preset, cons
     if (!tree) return -1.0f;
     return tree->getChildWithProperty("id", id).getProperty("value");
 }
+// True when two visible children of parent overlap.
+bool overlapping(const juce::Component& parent) {
+    const auto& children = parent.getChildren();
+    return std::ranges::any_of(children, [&children](const juce::Component* child) {
+        return child->isVisible() && std::ranges::any_of(children, [child](const juce::Component* other) {
+            return other != child && other->isVisible() && other->getBounds().intersects(child->getBounds());
+        });
+    });
+}
+std::vector<juce::Component*> descendants(juce::Component& root) {
+    std::vector<juce::Component*> all {&root};
+    std::ranges::for_each(root.getChildren(), [&all](juce::Component* child) {
+        const auto below = descendants(*child);
+        all.insert(all.end(), below.begin(), below.end());
+    });
+    return all;
+}
 juce::Component* find(juce::Component& root, const juce::String& id) {
     if (root.getComponentID() == id) return &root;
     for (auto* child : root.getChildren()) if (auto* match = find(*child, id)) return match;
@@ -336,6 +353,37 @@ int runOpenSausageSuiteTests() {
         std::unique_ptr<juce::AudioProcessorEditor> reopenedEditor(reopened.createEditor());
         require(reopenedEditor->getWidth() == designWidth * 6 / 5 && reopenedEditor->getHeight() == designHeight * 6 / 5,
             "Editor did not reopen at its saved size");
+    }
+
+    SausageProcessor layout;
+    {
+        std::unique_ptr<juce::AudioProcessorEditor> editor(layout.createEditor());
+        auto* content = find(*editor, "algorithm")->getParentComponent();
+        auto* suiteBar = find(*editor, "suiteUndo")->getParentComponent();
+        const std::array<juce::Component*, 7> containers {content, suiteBar, find(*editor, "presetBrowser")->getParentComponent(),
+            find(*editor, "fatness")->getParentComponent(), find(*editor, "space")->getParentComponent(),
+            find(*editor, "rise")->getParentComponent(), find(*editor, "width")->getParentComponent()};
+        require(std::ranges::none_of(containers, [](juce::Component* container) { return overlapping(*container); }), "Editor controls overlap");
+        const auto all = descendants(*editor);
+        require(std::ranges::none_of(all, [](juce::Component* component) {
+            const auto* button = dynamic_cast<juce::TextButton*>(component);
+            return button != nullptr && button->isVisible() && button->getHeight() < 36;
+        }), "A button is shorter than 36 px");
+        const std::array<juce::Component*, 3> icons {find(*editor, "suitePrevious"), find(*editor, "suiteNext"), find(*editor, "suiteFavorite")};
+        require(std::ranges::all_of(icons, [](juce::Component* icon) { return icon->getWidth() >= 40 && icon->getHeight() >= 40; }),
+            "An icon button is smaller than 40x40");
+        const auto* corner = *std::ranges::find_if(editor->getChildren(), [](juce::Component* child) {
+            return dynamic_cast<juce::ResizableCornerComponent*>(child) != nullptr;
+        });
+        const auto clearOfCorner = [&] {
+            return std::ranges::none_of(suiteBar->getChildren(), [&](juce::Component* control) {
+                return editor->getLocalArea(control, control->getLocalBounds()).intersects(corner->getBounds());
+            });
+        };
+        editor->setSize(editor->getWidth() * 3 / 4, editor->getHeight() * 3 / 4);
+        require(clearOfCorner(), "The resize corner covers a suite bar control at 75%");
+        editor->setSize(editor->getWidth() * 2, editor->getHeight() * 2);
+        require(clearOfCorner(), "The resize corner covers a suite bar control at 150%");
     }
 
     SausageProcessor visuals;
