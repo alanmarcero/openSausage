@@ -376,6 +376,12 @@ int runOpenSausageSuiteTests() {
         const std::array<juce::Component*, 3> icons {find(*editor, "suitePrevious"), find(*editor, "suiteNext"), find(*editor, "suiteFavorite")};
         require(std::ranges::all_of(icons, [](juce::Component* icon) { return icon->getWidth() >= 40 && icon->getHeight() >= 40; }),
             "An icon button is smaller than 40x40");
+        require(std::ranges::none_of(all, [](juce::Component* component) {
+            const bool control = dynamic_cast<juce::Slider*>(component) != nullptr
+                              || dynamic_cast<juce::ComboBox*>(component) != nullptr
+                              || dynamic_cast<juce::Button*>(component) != nullptr;
+            return control && component->getTitle().isEmpty();
+        }), "A slider, combo box, or button is missing a title");
         const auto* corner = *std::ranges::find_if(editor->getChildren(), [](juce::Component* child) {
             return dynamic_cast<juce::ResizableCornerComponent*>(child) != nullptr;
         });
