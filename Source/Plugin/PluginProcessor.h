@@ -13,7 +13,7 @@ struct SausageRecipe {
     float satMix = 100.0f, satDynamics = 100.0f, satFocus = 0.0f, preDelay = 0.0f, masterMix = 100.0f, softClip = 0.0f;
 };
 
-class SausageProcessor final : public juce::AudioProcessor {
+class SausageProcessor final : public juce::AudioProcessor, private juce::AsyncUpdater {
 public:
     explicit SausageProcessor(juce::File presetFolder = PresetLibrary::userDirectory("openSausage"));
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
@@ -37,7 +37,7 @@ public:
     void setStateInformation(const void*, int) override;
     juce::AudioProcessorParameter* getBypassParameter() const override;
     void applyRecipe(int index);
-    void loadParameterTree(const juce::ValueTree&);
+    void loadParameterTree(const juce::ValueTree&, const juce::String& presetName);
     juce::ValueTree copyParameterTree();
     static const std::vector<SausageRecipe>& factoryRecipes();
     juce::AudioProcessorValueTreeState parameters;
@@ -54,6 +54,7 @@ private:
     double visualQuarter = 0.0, clockRate = 44100.0;
     int currentProgram = 0;
     MusicalClock readClock(int samples);
+    void handleAsyncUpdate() override;
     static constexpr int parameterCount = 22;
     std::array<std::atomic<float>*, parameterCount> values {};
     sausage::RackSettings settings(bool hostBypassed = false) const noexcept;

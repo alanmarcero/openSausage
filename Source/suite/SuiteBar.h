@@ -7,6 +7,8 @@ public:
     class PresetRow final : public juce::Component {
     public:
         void resized() override;
+        juce::TextButton previous {"Previous preset"}, next {"Next preset"}, favorite {"Favorite"};
+        juce::ComboBox browser;
         juce::Label status;
     };
     explicit SuiteBar(SausageProcessor&);
@@ -17,6 +19,7 @@ public:
 private:
     void rebuild();
     void load(const PresetLibrary::Entry&);
+    void step(int direction);
     void savePreset();
     void renamePreset();
     void deletePresetFile();
@@ -26,11 +29,10 @@ private:
     const PresetLibrary::Entry* selected() const;
     SausageProcessor& processor;
     juce::TextButton undo {"Undo"}, redo {"Redo"}, slotA {"A"}, slotB {"B"}, copyAToB {"A>B"}, copyBToA {"B>A"};
-    juce::TextButton favorite {"*"}, save {"Save"}, renameButton {"Rename"}, deleteButton {"Delete"};
+    juce::TextButton save {"Save"}, renameButton {"Rename"}, deleteButton {"Delete"};
     juce::TextEditor search, name;
-    juce::ComboBox browser;
     std::vector<PresetLibrary::Entry> shown;
-    juce::String currentPreset;
+    juce::String shownLabel;
     juce::Button* armed = nullptr;
     juce::uint32 armedAt = 0;
     bool rebuilding = false;

@@ -23,7 +23,9 @@ int main(int argc, char** argv) {
     try {
         const juce::File output(argc > 1 ? juce::File::getCurrentWorkingDirectory().getChildFile(argv[1]) : juce::File::getCurrentWorkingDirectory().getChildFile("docs/screenshots"));
         require(output.createDirectory().wasOk(), "Cannot create screenshot directory");
-        SausageProcessor processor;
+        const auto presetFolder = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("openSausage-capture-presets");
+        presetFolder.deleteRecursively();
+        SausageProcessor processor(presetFolder);
         processor.prepareToPlay(48000, 256);
         std::unique_ptr<juce::AudioProcessorEditor> editor(processor.createEditor());
         require(editor != nullptr, "Editor missing");
@@ -192,12 +194,12 @@ int main(int argc, char** argv) {
             require(processor.parameters.getRawParameterValue(id)->load() == 1.0f, "Bypass not connected to host parameter");
             button->setToggleState(false, juce::sendNotificationSync);
         }
-        auto* recipes = dynamic_cast<juce::ComboBox*>(find(*editor, "recipes"));
-        require(recipes != nullptr, "Recipe selector missing");
-        require(recipes->getNumItems() == 48, "Expected 48 factory recipes");
-        require(recipes->getRootMenu()->getNumItems() == 7, "Expected 7 dance-style recipe submenus");
-        recipes->setSelectedId(5, juce::sendNotificationSync);
-        require(processor.parameters.getRawParameterValue("rise")->load() == 85.0f, "Recipe did not reach processor");
+        require(find(*editor, "recipes") == nullptr, "The header still has a second preset picker");
+        auto* presets = dynamic_cast<juce::ComboBox*>(find(*editor, "presetBrowser"));
+        require(presets != nullptr && presets->getNumItems() == 48, "Expected 48 factory recipes in the preset browser");
+        require(presets->getRootMenu()->getNumItems() == 7, "Expected 7 dance-style recipe submenus");
+        presets->setSelectedId(5, juce::sendNotificationSync);
+        require(processor.parameters.getRawParameterValue("rise")->load() == 85.0f, "Preset did not reach processor");
         for (const auto* id : {"spaceBypass", "widthBypass"})
             dynamic_cast<juce::TextButton*>(find(*editor, id))->setToggleState(true, juce::sendNotificationSync);
         juce::MemoryBlock state;

@@ -215,55 +215,11 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     softClip.setTooltip("Anti-aliased post-rack soft clipper ceiling so aggressive builds never exceed 0 dBFS.");
     bypass.setComponentID("bypass"); bypass.setName("Master bypass"); bypass.setClickingTogglesState(true);
     bypass.setTooltip("Bypass the complete chain. Latency stays at " + juce::String(owner.getLatencySamples()) + " samples.");
-    recipes.setComponentID("recipes"); recipes.setTextWhenNothingSelected("CHOOSE A RECIPE");
-    recipes.setTooltip("Choose a dance-style factory recipe for the four effect sections");
-    std::vector<juce::String> groups;
-    std::vector<juce::PopupMenu> menus;
-    std::ranges::for_each(SausageProcessor::factoryRecipes(), [&, id = 1](const SausageRecipe& recipe) mutable {
-        const juce::String full(recipe.name);
-        const auto group = full.upToFirstOccurrenceOf(" / ", false, false);
-        const auto it = std::ranges::find(groups, group);
-        const auto idx = static_cast<std::size_t>(std::distance(groups.begin(), it));
-        if (it == groups.end()) {
-            groups.push_back(group);
-            menus.emplace_back();
-        }
-        menus[idx].addItem(id++, full);
-    });
-    auto* root = recipes.getRootMenu();
-    std::ranges::for_each(groups, [&, i = std::size_t{0}](const juce::String& group) mutable {
-        root->addSubMenu(group, menus[i++]);
-    });
-    recipes.onChange = [this] {
-        const auto selected = recipes.getSelectedId();
-        if (selected > 0) {
-            currentRecipe = selected - 1;
-            ownerProcessor.setCurrentProgram(currentRecipe);
-        }
-    };
-    prevRecipe.setComponentID("prevRecipe");
-    prevRecipe.setTooltip("Previous recipe");
-    prevRecipe.onClick = [this] {
-        const int num = recipes.getNumItems();
-        if (num <= 0) return;
-        currentRecipe = (currentRecipe <= 0 ? num : currentRecipe) - 1;
-        ownerProcessor.setCurrentProgram(currentRecipe);
-        recipes.setSelectedId(currentRecipe + 1, juce::dontSendNotification);
-    };
-    nextRecipe.setComponentID("nextRecipe");
-    nextRecipe.setTooltip("Next recipe");
-    nextRecipe.onClick = [this] {
-        const int num = recipes.getNumItems();
-        if (num <= 0) return;
-        currentRecipe = (currentRecipe + 1) % num;
-        ownerProcessor.setCurrentProgram(currentRecipe);
-        recipes.setSelectedId(currentRecipe + 1, juce::dontSendNotification);
-    };
     algorithms.setComponentID("algorithm"); algorithms.setName("Global algorithm");
     for (int i = 0; i < 4; ++i) algorithms.addItem(sausage::algorithmNames[i], i + 1);
     algorithms.setTooltip("One algorithm set for all four effects. Classic is the original set. Velvet uses atan and a hall. Punch uses clipping and a short room. Prism uses wavefolding and a brighter hall. Knob settings stay put.");
     algorithmAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(owner.parameters, "algorithm", algorithms);
-    for (auto* child : std::initializer_list<juce::Component*> {&output, &masterMix, &softClip, &bypass, &recipes, &algorithms, &prevRecipe, &nextRecipe, &suite, &suite.presetRow})
+    for (auto* child : std::initializer_list<juce::Component*> {&output, &masterMix, &softClip, &bypass, &algorithms, &suite, &suite.presetRow})
         content.addAndMakeVisible(child);
     setWantsKeyboardFocus(true);
     // Read the saved width first: the resize limits below call resized(), which stores the width.
@@ -292,11 +248,6 @@ bool SausageEditor::keyPressed(const juce::KeyPress& key) {
     return true;
 }
 void SausageEditor::timerCallback() {
-    const int program = ownerProcessor.getCurrentProgram();
-    if (program != currentRecipe && program >= 0) {
-        currentRecipe = program;
-        recipes.setSelectedId(program + 1, juce::dontSendNotification);
-    }
     suite.refresh();
     for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) p->setBeatPhase(animationPhase());
     content.repaint(20, 4, 175, 160);
@@ -322,7 +273,7 @@ void SausageEditor::paintContent(juce::Graphics& g) {
     text(g, "Saturation / Space / Pitch / Stereo", {190, 94, 330, 25}, 14.0f, ink, juce::Font::bold);
     text(g, "v" JucePlugin_VersionString, {190, 122, 150, 18}, 12.0f, juce::Colour(0xff869ca8));
     text(g, "Algorithm", {532, 81, 145, 20}, 14.0f, ink, juce::Font::bold);
-    text(g, "Recipe", {706, 81, 412, 20}, 14.0f, ink, juce::Font::bold);
+    text(g, "Preset", {706, 81, 412, 20}, 14.0f, ink, juce::Font::bold);
     text(g, "ALAN MARCERO", {930, 31, 196, 24}, 15.0f, ink, juce::Font::bold, juce::Justification::centredRight);
     g.setColour(juce::Colour(0xf00c1418)); g.fillRect(0, 609, 1160, 111);
     g.setColour(juce::Colour(0xff48f0c8).withAlpha(0.4f)); g.drawHorizontalLine(609, 24, 1136);
@@ -345,10 +296,7 @@ void SausageEditor::resized() {
     risePanel.setBounds(588, 172, 266, 415); widthPanel.setBounds(870, 172, 266, 415);
     output.setBounds(456, 611, 96, 74); masterMix.setBounds(632, 611, 96, 74);
     softClip.setBounds(864, 633, 112, 36); bypass.setBounds(986, 633, 146, 36);
-    prevRecipe.setBounds(706, 104, 74, 36);
-    recipes.setBounds(786, 104, 236, 36);
-    nextRecipe.setBounds(1028, 104, 90, 36);
     algorithms.setBounds(532, 104, 158, 36);
     suite.setBounds(0, 688, 1160, 32);
-    suite.presetRow.setBounds(706, 146, 426, 20);
+    suite.presetRow.setBounds(706, 102, 426, 66);
 }

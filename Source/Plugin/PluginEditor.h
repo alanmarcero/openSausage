@@ -58,9 +58,7 @@ private:
     ModulePanel sausagePanel, spacePanel, risePanel, widthPanel;
     juce::Slider output, masterMix;
     juce::TextButton bypass, softClip{"Soft Clip"};
-    juce::ComboBox recipes, algorithms;
-    juce::TextButton prevRecipe{"Previous"}, nextRecipe{"Next"};
-    int currentRecipe = -1;
+    juce::ComboBox algorithms;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> algorithmAttachment;
     juce::AudioProcessorValueTreeState::SliderAttachment outputAttachment, masterMixAttachment;
     juce::AudioProcessorValueTreeState::ButtonAttachment bypassAttachment, softClipAttachment;

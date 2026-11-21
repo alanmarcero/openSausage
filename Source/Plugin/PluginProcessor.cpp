@@ -68,6 +68,14 @@ SausageProcessor::SausageProcessor(juce::File presetFolder)
     static_assert(std::size(ids) == parameterCount);
     for (std::size_t i = 0; i < values.size(); ++i) values[i] = parameters.getRawParameterValue(ids[i]);
     setLatencySamples(sausage::Core::latency);
+    compare.install(0, {}, {factoryRecipes().front().name, false});
+    history.onCommit = [this] {
+        if (!compare.label().edited) compare.relabel({compare.label().name, true});
+    };
+}
+// A host can change the program on the audio thread. The label then follows on the message thread.
+void SausageProcessor::handleAsyncUpdate() {
+    compare.setLabel({factoryRecipes()[static_cast<std::size_t>(currentProgram)].name, false});
 }
 sausage::RackSettings SausageProcessor::settings(bool hostBypassed) const noexcept {
     auto value = [this](std::size_t i) { return values[i]->load(std::memory_order_relaxed); };
@@ -178,11 +186,13 @@ void SausageProcessor::setStateInformation(const void* data, int bytes) {
             parameters.replaceState(state);
             currentProgram = program >= 0 && program < getNumPrograms() ? program : 0;
             editorWidth = static_cast<int>(state.getProperty("editorWidth", 0));
-            compare.install(slot, inactive);
+            // A session without a label shows its recipe, marked edited.
+            compare.install(slot, inactive, {state.getProperty("presetName", getProgramName(currentProgram)).toString(),
+                                             static_cast<bool>(state.getProperty("presetEdited", true))});
             history.clear();
         }
 }
-void SausageProcessor::loadParameterTree(const juce::ValueTree& tree) {
+void SausageProcessor::loadParameterTree(const juce::ValueTree& tree, const juce::String& presetName) {
     const bool grouped = history.beginGroup("Preset");
     for (int index = 0; index < tree.getNumChildren(); ++index) {
         const auto child = tree.getChild(index);
@@ -193,7 +203,9 @@ void SausageProcessor::loadParameterTree(const juce::ValueTree& tree) {
         parameter->setValueNotifyingHost(parameter->convertTo0to1(denormalised));
         parameter->endChangeGesture();
     }
-    if (grouped) history.endGroup();
+    if (!grouped) return;
+    history.endGroup();
+    compare.relabel({presetName, false});
 }
 juce::ValueTree SausageProcessor::copyParameterTree() { return parameters.copyState(); }
 const std::vector<SausageRecipe>& SausageProcessor::factoryRecipes() {
@@ -282,6 +294,11 @@ void SausageProcessor::applyRecipe(int index) {
         parameter->setValueNotifyingHost(parameter->convertTo0to1(entry.second));
         parameter->endChangeGesture();
     });
-    if (grouped) history.endGroup();
+    if (!grouped) {
+        triggerAsyncUpdate();
+        return;
+    }
+    history.endGroup();
+    compare.relabel({r.name, false});
 }
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new SausageProcessor(); }

@@ -2,6 +2,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <array>
 #include <atomic>
+#include <functional>
 #include <vector>
 
 // Gesture-grouped undo for AudioProcessor parameters. One drag, click, or
@@ -26,6 +27,8 @@ public:
     bool beginGroup(const juce::String& name);
     void endGroup();
     void perform(juce::UndoableAction* action);
+    // Runs on the message thread after each recorded step.
+    std::function<void()> onCommit;
 
     class Suspend {
     public:
