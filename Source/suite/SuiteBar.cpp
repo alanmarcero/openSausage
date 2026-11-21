@@ -36,8 +36,20 @@ SuiteBar::SuiteBar(SausageProcessor& owner) : processor(owner) {
     add(*this, deleteButton, "suiteDelete", "Delete the current saved preset. Asks first. Factory recipes stay read-only.");
     undo.onClick = [this] { processor.history.undo(); refresh(); };
     redo.onClick = [this] { processor.history.redo(); refresh(); };
-    slotA.onClick = [this] { if (processor.compare.isB()) processor.compare.toggle(); refresh(); };
-    slotB.onClick = [this] { if (!processor.compare.isB()) processor.compare.toggle(); refresh(); };
+    slotA.onClick = [this] {
+        if (processor.compare.isB()) {
+            processor.compare.toggle();
+            disarm();
+        }
+        refresh();
+    };
+    slotB.onClick = [this] {
+        if (!processor.compare.isB()) {
+            processor.compare.toggle();
+            disarm();
+        }
+        refresh();
+    };
     copyAToB.onClick = [this] { processor.compare.copyAToB(); refresh(); };
     copyBToA.onClick = [this] { processor.compare.copyBToA(); refresh(); };
     presetRow.previous.onClick = [this] { step(-1); };
@@ -81,6 +93,7 @@ SuiteBar::SuiteBar(SausageProcessor& owner) : processor(owner) {
     browser.setTitle("Preset browser");
     browser.setTooltip("Factory recipes and presets saved in Documents/Alan Marcero/openSausage/Presets. An asterisk marks unsaved edits.");
     browser.onChange = [this] {
+        if (!rebuilding) disarm();
         if (const auto* entry = selected(); entry != nullptr && !rebuilding) load(*entry);
     };
     presetRow.addAndMakeVisible(browser);
@@ -122,6 +135,7 @@ const PresetLibrary::Entry* SuiteBar::selected() const {
     return &shown[static_cast<std::size_t>(id - 1)];
 }
 void SuiteBar::rebuild() {
+    const auto previousSelection = selected() != nullptr ? selected()->name : juce::String();
     auto& browser = presetRow.browser;
     rebuilding = true;
     browser.clear(juce::dontSendNotification);
@@ -168,6 +182,8 @@ void SuiteBar::rebuild() {
     closeGenre();
     const auto current = std::ranges::find_if(shown, [&label](const PresetLibrary::Entry& entry) { return entry.name.equalsIgnoreCase(label.name); });
     if (current != shown.end()) browser.setSelectedId(static_cast<int>(std::distance(shown.begin(), current)) + 1, juce::dontSendNotification);
+    const auto* nextEntry = selected();
+    if ((nextEntry != nullptr ? nextEntry->name : juce::String()) != previousSelection) disarm();
     rebuilding = false;
     refresh();
 }
@@ -232,25 +248,30 @@ void SuiteBar::renamePreset() {
 }
 void SuiteBar::deletePresetFile() {
     const auto* entry = selected();
-    if (entry == nullptr || entry->factory) return;
+    if (entry == nullptr || entry->factory) {
+        disarm();
+        return;
+    }
     const auto presetName = entry->name;
-    if (armed != &deleteButton) {
+    if (armed != &deleteButton || armedDeleteTarget != presetName) {
         disarm();
         armed = &deleteButton;
+        armedDeleteTarget = presetName;
         armedAt = juce::Time::getMillisecondCounter();
         deleteButton.setButtonText("Delete?");
         report("Click Delete? again to remove " + presetName + ".");
         return;
     }
+    const auto target = armedDeleteTarget;
     disarm();
     juce::String error;
-    if (!processor.presets.remove(presetName, error)) {
+    if (!processor.presets.remove(target, error)) {
         report(error, true);
         return;
     }
     // The sound is no longer saved anywhere.
-    processor.compare.setLabel({presetName, true});
-    report("Deleted " + presetName + ".");
+    processor.compare.setLabel({target, true});
+    report("Deleted " + target + ".");
     rebuild();
 }
 void SuiteBar::toggleFavorite() {
@@ -261,6 +282,7 @@ void SuiteBar::toggleFavorite() {
 }
 void SuiteBar::disarm() {
     armed = nullptr;
+    armedDeleteTarget.clear();
     save.setButtonText("Save");
     deleteButton.setButtonText("Delete");
 }
@@ -280,11 +302,12 @@ void SuiteBar::PresetRow::resized() {
 }
 void SuiteBar::refresh() {
     if (armed != nullptr && juce::Time::getMillisecondCounter() - armedAt > confirmWindowMs) disarm();
+    const bool hearingB = processor.compare.isB();
+    if (hearingB != slotB.getToggleState()) disarm();
     const auto& label = processor.compare.label();
     if ((label.edited ? label.name + " *" : label.name) != shownLabel) rebuild();
     undo.setEnabled(processor.history.canUndo());
     redo.setEnabled(processor.history.canRedo());
-    const bool hearingB = processor.compare.isB();
     slotA.setToggleState(!hearingB, juce::dontSendNotification);
     slotB.setToggleState(hearingB, juce::dontSendNotification);
     const auto* entry = selected();

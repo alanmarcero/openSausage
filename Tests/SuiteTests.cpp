@@ -290,6 +290,55 @@ int runOpenSausageSuiteTests() {
     }
     barFolder.deleteRecursively();
 
+    auto confirmFolder = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("openSausage-suite-confirm");
+    confirmFolder.deleteRecursively();
+    SausageProcessor confirm(confirmFolder);
+    if (!confirm.presets.save("Preset X", confirm.copyParameterTree(), error)) throw std::runtime_error(error.toStdString());
+    if (!confirm.presets.save("Preset Y", confirm.copyParameterTree(), error)) throw std::runtime_error(error.toStdString());
+    {
+        std::unique_ptr<juce::AudioProcessorEditor> editor(confirm.createEditor());
+        auto* slotA = dynamic_cast<juce::TextButton*>(find(*editor, "suiteA"));
+        auto* slotB = dynamic_cast<juce::TextButton*>(find(*editor, "suiteB"));
+        auto* search = dynamic_cast<juce::TextEditor*>(find(*editor, "presetSearch"));
+        auto* presetName = dynamic_cast<juce::TextEditor*>(find(*editor, "presetName"));
+        auto* saveButton = dynamic_cast<juce::TextButton*>(find(*editor, "suiteSave"));
+        auto* deleteButton = dynamic_cast<juce::TextButton*>(find(*editor, "suiteDelete"));
+        auto* nextButton = dynamic_cast<juce::TextButton*>(find(*editor, "suiteNext"));
+        require(slotA && slotB && search && presetName && saveButton && deleteButton && nextButton, "Suite confirm controls missing");
+        search->setText("Preset X", false);
+        search->onTextChange();
+        search->onReturnKey();
+        slotB->onClick();
+        search->setText("Preset Y", false);
+        search->onTextChange();
+        search->onReturnKey();
+        slotA->onClick();
+        search->setText({}, false);
+        search->onTextChange();
+        // Arm Delete? on Preset X in A, then switch to B (Preset Y) within the confirm window.
+        deleteButton->onClick();
+        require(deleteButton->getButtonText() == "Delete?", "First Delete click did not arm Delete?");
+        slotB->onClick();
+        require(deleteButton->getButtonText() == "Delete", "A/B switch did not disarm Delete?");
+        deleteButton->onClick();
+        require(confirmFolder.getChildFile("Preset X.preset").existsAsFile() && confirmFolder.getChildFile("Preset Y.preset").existsAsFile(),
+            "Switching A/B after arming Delete? deleted a preset");
+        // Arm Replace? on Preset Y in B, then switch to A.
+        presetName->setText("Preset Y", false);
+        saveButton->onClick();
+        require(saveButton->getButtonText() == "Replace?", "Save did not arm Replace?");
+        slotA->onClick();
+        require(saveButton->getButtonText() == "Save", "A/B switch did not disarm Replace?");
+        // Arm Delete? on Preset X, then change selection via Next.
+        deleteButton->onClick();
+        require(deleteButton->getButtonText() == "Delete?", "Delete did not re-arm on Preset X");
+        nextButton->onClick();
+        require(deleteButton->getButtonText() == "Delete", "Selection change did not disarm Delete?");
+        require(confirmFolder.getChildFile("Preset X.preset").existsAsFile() && confirmFolder.getChildFile("Preset Y.preset").existsAsFile(),
+            "Selection change deleted a preset");
+    }
+    confirmFolder.deleteRecursively();
+
     SausageProcessor formats;
     std::vector<juce::AudioProcessorParameter*> floats;
     std::ranges::copy_if(formats.getParameters(), std::back_inserter(floats),
