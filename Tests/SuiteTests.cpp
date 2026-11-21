@@ -1,6 +1,8 @@
 #include "PluginEditor.h"
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <stdexcept>
 
 namespace {
@@ -241,6 +243,33 @@ int runOpenSausageSuiteTests() {
         require(!barFolder.getChildFile("My Bass.preset").existsAsFile(), "The second Delete click did not remove the preset");
     }
     barFolder.deleteRecursively();
+
+    SausageProcessor formats;
+    std::vector<juce::AudioProcessorParameter*> floats;
+    std::ranges::copy_if(formats.getParameters(), std::back_inserter(floats),
+        [](juce::AudioProcessorParameter* parameter) { return dynamic_cast<juce::AudioParameterFloat*>(parameter) != nullptr; });
+    require(floats.size() == 13, "Expected 13 float parameters");
+    constexpr std::array<float, 6> points {0.0f, 0.1f, 0.25f, 0.5f, 0.77f, 1.0f};
+    const auto unstable = std::ranges::find_if(floats, [&points](juce::AudioProcessorParameter* parameter) {
+        return !std::ranges::all_of(points, [parameter](float value) {
+            const auto text = parameter->getText(value, 0);
+            return parameter->getText(parameter->getValueForText(text), 0) == text;
+        });
+    });
+    if (unstable != floats.end()) throw std::runtime_error(("Typed text does not round-trip: " + (*unstable)->getName(64)).toStdString());
+    auto* fatnessText = formats.parameters.getParameter("fatness");
+    require(fatnessText->getText(fatnessText->convertTo0to1(55.0f), 0) == "55%", "Percent is not shown as whole percent");
+    require(juce::approximatelyEqual(fatnessText->getValueForText("50"), fatnessText->getValueForText("50%")), "50 and 50% differ");
+    auto* trimText = formats.parameters.getParameter("output");
+    require(trimText->getText(trimText->convertTo0to1(3.0f), 0) == "+3.0 dB" && trimText->getText(trimText->convertTo0to1(-0.04f), 0) == "0.0 dB",
+        "Wet trim is not shown as signed dB");
+    auto* preDelayText = formats.parameters.getParameter("preDelay");
+    require(preDelayText->getText(preDelayText->convertTo0to1(4.5f), 0) == "4.5 ms" && preDelayText->getText(preDelayText->convertTo0to1(45.0f), 0) == "45 ms",
+        "Pre-delay is not shown in ms");
+    require(std::abs(preDelayText->convertFrom0to1(preDelayText->getValueForText("0.05 s")) - 50.0f) < 0.05f, "Pre-delay did not convert s to ms");
+    auto* riseText = formats.parameters.getParameter("rise");
+    require(riseText->getText(1.0f, 0) == "+12.0 st", "Rise is not shown in semitones");
+    require(riseText->getText(riseText->getValueForText("7 st"), 0) == "+7.0 st", "Rise does not accept semitones");
 
     SausageProcessor visuals;
     {

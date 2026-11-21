@@ -16,7 +16,6 @@ void dial(juce::Slider& slider, const juce::String& id, juce::Colour accent) {
     slider.setRotaryParameters(juce::MathConstants<float>::pi * 1.25f, juce::MathConstants<float>::pi * 2.75f, true);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 76, 24);
     slider.setColour(juce::Slider::rotarySliderFillColourId, accent);
-    slider.setTextValueSuffix(" %");
     slider.setNumDecimalPlacesToDisplay(1);
     slider.setColour(juce::Slider::textBoxTextColourId, ink);
     slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
@@ -74,7 +73,6 @@ ModulePanel::ModulePanel(juce::AudioProcessorValueTreeState& state, const juce::
         dial(preDelay, "preDelay", color);
         preDelay.setSliderStyle(juce::Slider::LinearHorizontal);
         preDelay.setTextBoxStyle(juce::Slider::TextBoxRight, false, 52, 24);
-        preDelay.setTextValueSuffix(" ms");
         preDelay.setNumDecimalPlacesToDisplay(0);
         preDelay.setDoubleClickReturnValue(true, 0.0);
         preDelay.setTooltip("Space pre-delay (0 to 100 ms) so transients punch through before the reverb tail.");
@@ -204,7 +202,7 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     grill = juce::Drawable::createFromImageData(BinaryData::grill_svg, BinaryData::grill_svgSize);
     for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) addAndMakeVisible(p);
     dial(output, "output", juce::Colour(0xffffbe3b));
-    output.setTextValueSuffix(" dB"); output.setTooltip("Wet trim: level of the processed signal before Soft Clip and Rack mix. It has no effect at Rack mix 0%. Master bypass skips it.");
+    output.setTooltip("Wet trim: level of the processed signal before Soft Clip and Rack mix. It has no effect at Rack mix 0%. Master bypass skips it.");
     output.setColour(juce::Slider::textBoxTextColourId, cream);
     dial(masterMix, "masterMix", juce::Colour(0xff48f0c8));
     masterMix.setDoubleClickReturnValue(true, 100.0);

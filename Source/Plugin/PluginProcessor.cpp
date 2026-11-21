@@ -9,20 +9,46 @@ namespace {
 constexpr const char* ids[] {"fatness", "color", "space", "size", "rise", "riseMix", "width", "spread", "output", "sausageBypass", "spaceBypass", "riseBypass", "widthBypass", "bypass", "algorithm", "satMix", "satDynamics", "satFocus", "preDelay", "masterMix", "softClip", "riseLength"};
 juce::AudioProcessorValueTreeState::ParameterLayout layout() {
     juce::AudioProcessorValueTreeState::ParameterLayout result;
+    const auto percent = juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float value, int) {
+        return juce::String(juce::roundToInt(value)) + "%";
+    });
+    // Rise sets the pitch ratio 2^(Rise / 100), so 100% is 12 semitones.
+    constexpr float semitonesPerRise = 0.12f;
+    const auto semitones = juce::AudioParameterFloatAttributes()
+        .withStringFromValueFunction([](float value, int) {
+            const auto rounded = std::round(value * semitonesPerRise * 10.0f) / 10.0f;
+            return (rounded > 0.0f ? "+" : "") + juce::String(rounded, 1) + " st";
+        })
+        .withValueFromStringFunction([](const juce::String& text) { return text.getFloatValue() / semitonesPerRise; });
+    const auto decibels = juce::AudioParameterFloatAttributes().withStringFromValueFunction([](float value, int) {
+        const auto rounded = std::round(value * 10.0f) / 10.0f;
+        const auto shown = std::abs(rounded) < 0.05f ? 0.0f : rounded;
+        return (shown > 0.0f ? "+" : "") + juce::String(shown, 1) + " dB";
+    });
+    const auto milliseconds = juce::AudioParameterFloatAttributes()
+        .withStringFromValueFunction([](float value, int) {
+            if (value < 9.95f) return juce::String(value, 1) + " ms";
+            return juce::String(juce::roundToInt(value)) + " ms";
+        })
+        .withValueFromStringFunction([](const juce::String& text) {
+            const auto trimmed = text.trim();
+            const bool seconds = trimmed.endsWithIgnoreCase("s") && !trimmed.endsWithIgnoreCase("ms");
+            return trimmed.getFloatValue() * (seconds ? 1000.0f : 1.0f);
+        });
     const char* names[] {"Fatness", "Color", "Space Mix", "Space Size", "Rise Amount", "Rise Mix", "Width Amount", "Width Spread"};
     for (int i = 0; i < 8; ++i)
-        result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ids[i], 1), names[i], juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), (i == 3 || i == 7) ? 50.0f : 0.0f));
-    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("output", 1), "Wet Trim", juce::NormalisableRange<float>(-24.0f, 12.0f, 0.1f), 0.0f));
+        result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ids[i], 1), names[i], juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), (i == 3 || i == 7) ? 50.0f : 0.0f, i == 4 ? semitones : percent));
+    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("output", 1), "Wet Trim", juce::NormalisableRange<float>(-24.0f, 12.0f, 0.1f), 0.0f, decibels));
     const char* switches[] {"Sausage Bypass", "Space Bypass", "Rise Bypass", "Width Bypass", "Master Bypass"};
     for (int i = 0; i < 5; ++i) result.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ids[i + 9], 1), switches[i], false));
     juce::StringArray algorithms;
     for (const auto* name : sausage::algorithmNames) algorithms.add(name);
     result.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("algorithm", 2), "Global Algorithm", algorithms, 0));
-    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("satMix", 1), "Saturation Mix", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, juce::AudioParameterFloatAttributes().withLabel("%")));
-    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("satDynamics", 1), "Saturation Dynamics", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, juce::AudioParameterFloatAttributes().withLabel("%")));
+    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("satMix", 1), "Saturation Mix", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, percent));
+    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("satDynamics", 1), "Saturation Dynamics", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, percent));
     result.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("satFocus", 1), "Saturation Focus", juce::StringArray {"Neutral", "Keep Low", "Keep High"}, 0));
-    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("preDelay", 2), "Space Pre-Delay", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, juce::AudioParameterFloatAttributes().withLabel("ms")));
-    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("masterMix", 2), "Master Mix", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, juce::AudioParameterFloatAttributes().withLabel("%")));
+    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("preDelay", 2), "Space Pre-Delay", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, milliseconds));
+    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("masterMix", 2), "Master Mix", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, percent));
     result.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("softClip", 2), "Soft Clip", false));
     result.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("riseLength", 1), "Rise Length",
         juce::StringArray {"Free", "1 Bar", "2 Bars", "4 Bars", "8 Bars", "16 Bars"}, 0));
