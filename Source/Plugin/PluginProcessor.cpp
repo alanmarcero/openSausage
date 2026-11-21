@@ -48,7 +48,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout layout() {
     result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("satDynamics", 1), "Saturation Dynamics", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, percent));
     result.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("satFocus", 1), "Saturation Focus", juce::StringArray {"Neutral", "Keep Low", "Keep High"}, 0));
     result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("preDelay", 2), "Space Pre-Delay", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, milliseconds));
-    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("masterMix", 2), "Master Mix", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, percent));
+    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("masterMix", 2), "Rack Mix", juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 100.0f, percent));
     result.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID("softClip", 2), "Soft Clip", false));
     result.add(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID("riseLength", 1), "Rise Length",
         juce::StringArray {"Free", "1 Bar", "2 Bars", "4 Bars", "8 Bars", "16 Bars"}, 0));
