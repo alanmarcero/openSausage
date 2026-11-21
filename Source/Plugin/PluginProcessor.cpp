@@ -12,7 +12,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout layout() {
     const char* names[] {"Fatness", "Color", "Space Mix", "Space Size", "Rise Amount", "Rise Mix", "Width Amount", "Width Spread"};
     for (int i = 0; i < 8; ++i)
         result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ids[i], 1), names[i], juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), (i == 3 || i == 7) ? 50.0f : 0.0f));
-    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("output", 1), "Output", juce::NormalisableRange<float>(-24.0f, 12.0f, 0.1f), 0.0f));
+    result.add(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID("output", 1), "Wet Trim", juce::NormalisableRange<float>(-24.0f, 12.0f, 0.1f), 0.0f));
     const char* switches[] {"Sausage Bypass", "Space Bypass", "Rise Bypass", "Width Bypass", "Master Bypass"};
     for (int i = 0; i < 5; ++i) result.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ids[i + 9], 1), switches[i], false));
     juce::StringArray algorithms;

@@ -101,9 +101,9 @@ void ModulePanel::paint(juce::Graphics& g) {
     text(g, title, {28, 16, 120, 36}, 29.0f, ink, juce::Font::bold);
     constexpr const char* descriptions[4][4] {
         {"SATURATION + COMPRESSION", "STEREO REVERB", "PITCH + BUILDUP", "STEREO WIDENER"},
-        {"ATAN / ANTIALIASED", "HOUSEHOLDER HALL", "FOUR-GRAIN RISE", "ALLPASS WIDTH"},
-        {"CLIP / ANTIALIASED", "TIGHT ROOM", "SHORT-GRAIN RISE", "BASS-FOCUSED WIDTH"},
-        {"SINE FOLD / ANTIALIASED", "HADAMARD HALL", "CROSS-FEEDBACK RISE", "MODULATED WIDTH"}
+        {"SOFT SATURATION", "DARK HALL", "SMOOTH RISE", "DIFFUSE WIDTH"},
+        {"HARD-CLIP SATURATION", "TIGHT ROOM", "CLEAN RISE", "BASS-SAFE WIDTH"},
+        {"WAVEFOLD SATURATION", "BRIGHT HALL", "FEEDBACK RISE", "MOVING WIDTH"}
     };
     const auto mode = juce::jlimit(0, 3, static_cast<int>(algorithm->load()));
     text(g, mode == 0 ? subtitle : descriptions[mode][kind], {20, 57, 210, 22}, 12.0f, juce::Colour(0xffa3afaf));
@@ -204,7 +204,7 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     grill = juce::Drawable::createFromImageData(BinaryData::grill_svg, BinaryData::grill_svgSize);
     for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) addAndMakeVisible(p);
     dial(output, "output", juce::Colour(0xffffbe3b));
-    output.setTextValueSuffix(" dB"); output.setTooltip("Final output trim, after all four effects. Master bypass ignores trim.");
+    output.setTextValueSuffix(" dB"); output.setTooltip("Wet trim: level of the processed signal before Soft Clip and Rack mix. It has no effect at Rack mix 0%. Master bypass skips it.");
     output.setColour(juce::Slider::textBoxTextColourId, cream);
     dial(masterMix, "masterMix", juce::Colour(0xff48f0c8));
     masterMix.setDoubleClickReturnValue(true, 100.0);
@@ -213,7 +213,7 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     softClip.setComponentID("softClip"); softClip.setName("Soft Clip"); softClip.setClickingTogglesState(true);
     softClip.setTooltip("Anti-aliased post-rack soft clipper ceiling so aggressive builds never exceed 0 dBFS.");
     bypass.setComponentID("bypass"); bypass.setName("Master bypass"); bypass.setClickingTogglesState(true);
-    bypass.setTooltip("Bypass the complete chain, preserving the reported 16-sample latency.");
+    bypass.setTooltip("Bypass the complete chain. Latency stays at " + juce::String(owner.getLatencySamples()) + " samples.");
     recipes.setComponentID("recipes"); recipes.setTextWhenNothingSelected("CHOOSE A RECIPE");
     recipes.setTooltip("Choose a dance-style factory recipe for the four effect sections");
     std::vector<juce::String> groups;
@@ -325,7 +325,7 @@ void SausageEditor::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xff48f0c8).withAlpha(0.4f)); g.drawHorizontalLine(609, 24, 1136);
     meter(g, "INPUT", ownerProcessor.inputPeak.load(std::memory_order_relaxed), 30);
     meter(g, "OUTPUT", ownerProcessor.outputPeak.load(std::memory_order_relaxed), 214);
-    text(g, "Output", {394, 638, 66, 22}, 13.0f, cream, juce::Font::bold);
+    text(g, "Wet trim", {390, 638, 66, 22}, 13.0f, cream, juce::Font::bold);
     text(g, "Rack mix", {562, 638, 74, 22}, 13.0f, cream, juce::Font::bold);
     text(g, "Compression", {738, 623, 126, 22}, 13.0f, cream, juce::Font::bold);
     text(g, juce::String(ownerProcessor.gainReduction.load(std::memory_order_relaxed), 1) + " dB", {738, 646, 126, 28}, 21.0f, juce::Colour(0xffffbe3b), juce::Font::bold);
