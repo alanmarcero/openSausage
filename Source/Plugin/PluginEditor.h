@@ -10,7 +10,8 @@ public:
                 const juce::String& secondaryLabel, const juce::String& bypassId, juce::Colour accent, const juce::String& hint);
     void paint(juce::Graphics&) override;
     void resized() override;
-    void setBeatPhase(float position) noexcept { phase = position; }
+    // Repaints the subtitle, LED, and beat display when what they show changed.
+    void setBeatPhase(float position);
 private:
     juce::String title, subtitle, primaryLabel, secondaryLabel, hint;
     juce::Colour accent;
@@ -21,6 +22,8 @@ private:
     std::atomic<float>* algorithm;
     int kind = 0;
     float phase = 0.0f;
+    std::array<float, 2> shownHeader {-1.0f, -1.0f};
+    std::array<float, 3> shownDisplay {-1.0f, -1.0f, -1.0f};
     juce::Slider primary, secondary, saturationMix, dynamics, preDelay;
     juce::ComboBox focus, riseLength;
     juce::TextButton bypass;
