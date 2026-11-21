@@ -83,10 +83,13 @@ ModulePanel::ModulePanel(juce::AudioProcessorValueTreeState& state, const juce::
       primaryAttachment(state, primaryId, primary), secondaryAttachment(state, secondaryId, secondary), bypassAttachment(state, bypassId, bypass) {
     kind = primaryId == "space" ? 1 : primaryId == "rise" ? 2 : primaryId == "width" ? 3 : 0;
     dial(primary, primaryId, color); dial(secondary, secondaryId, color);
+    primary.setTitle(primaryName);
+    secondary.setTitle(secondaryName);
     primary.setTooltip(primaryName + ": " + description + " Drag to change; double-click to reset; click the value to type.");
     secondary.setTooltip(secondaryName + ": fine-tune this effect. Double-click to reset.");
     bypass.setComponentID(bypassId);
     bypass.setName(name + " bypass");
+    bypass.setTitle(name + " bypass");
     bypass.setClickingTogglesState(true);
     bypass.setTooltip("Fully bypass " + name + ", including its wet signal and tails. Other modules keep running.");
     addAndMakeVisible(primary); addAndMakeVisible(secondary); addAndMakeVisible(bypass);
@@ -100,9 +103,12 @@ ModulePanel::ModulePanel(juce::AudioProcessorValueTreeState& state, const juce::
         }
         saturationMix.setDoubleClickReturnValue(true, 100.0);
         dynamics.setDoubleClickReturnValue(true, 100.0);
+        saturationMix.setTitle("Saturation Mix");
+        dynamics.setTitle("Dynamics");
         saturationMix.setTooltip("Blend the saturated signal with the clean signal. 0% is clean; 100% keeps the full existing Fatness/Color blend.");
         dynamics.setTooltip("Amount of the Fatness envelope compression. 0% bypasses compression; 100% uses the full compressor response.");
         focus.setComponentID("satFocus");
+        focus.setTitle("Saturation Focus");
         focus.addItemList({"Neutral", "Keep Low", "Keep High"}, 1);
         focus.setTooltip("Neutral saturates the full signal. Keep Low leaves bass mostly clean and saturates highs; Keep High saturates bass and keeps highs cleaner.");
         saturationMixAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, "satMix", saturationMix);
@@ -115,12 +121,14 @@ ModulePanel::ModulePanel(juce::AudioProcessorValueTreeState& state, const juce::
         preDelay.setTextBoxStyle(juce::Slider::TextBoxRight, false, 52, 24);
         preDelay.setNumDecimalPlacesToDisplay(0);
         preDelay.setDoubleClickReturnValue(true, 0.0);
+        preDelay.setTitle("Pre-Delay");
         preDelay.setTooltip("Space pre-delay (0 to 100 ms) so transients punch through before the reverb tail.");
         preDelayAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(state, "preDelay", preDelay);
         addAndMakeVisible(preDelay);
     } else if (kind == 2) {
         riseLength.setComponentID("riseLength");
         riseLength.setName("Rise length");
+        riseLength.setTitle("Rise length");
         riseLength.addItemList({"Free", "1 Bar", "2 Bars", "4 Bars", "8 Bars", "16 Bars"}, 1);
         riseLength.setTooltip("Free holds the Rise pitch. 1, 2, 4, 8, or 16 bars sweeps from unison up to Rise, locked to the host tempo.");
         riseLengthAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(state, "riseLength", riseLength);
@@ -261,6 +269,7 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     content.setBounds(0, 0, designWidth, designHeight);
     for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) content.addAndMakeVisible(p);
     dial(output, "output", juce::Colour(0xffffbe3b));
+    output.setTitle("Wet trim");
     output.setTooltip("Wet trim: level of the processed signal before Soft Clip and Rack mix. It has no effect at Rack mix 0%. Master bypass skips it.");
     output.setColour(juce::Slider::textBoxTextColourId, cream);
     inputMeter.setComponentID("inputMeter");
@@ -268,14 +277,15 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     inputMeter.setTooltip("Input peak in dBFS, held for 1 s. The red light latches above 0 dBFS; click to clear it.");
     outputMeter.setTooltip("Output peak in dBFS, held for 1 s. The red light latches above 0 dBFS; click to clear it.");
     dial(masterMix, "masterMix", juce::Colour(0xff48f0c8));
+    masterMix.setTitle("Rack mix");
     masterMix.setDoubleClickReturnValue(true, 100.0);
     masterMix.setTooltip("Rack mix: blend of the dry input and the processed rack. 0% is dry, 100% is fully processed.");
     masterMix.setColour(juce::Slider::textBoxTextColourId, cream);
-    softClip.setComponentID("softClip"); softClip.setName("Soft Clip"); softClip.setClickingTogglesState(true);
+    softClip.setComponentID("softClip"); softClip.setName("Soft Clip"); softClip.setTitle("Soft Clip"); softClip.setClickingTogglesState(true);
     softClip.setTooltip("Anti-aliased post-rack soft clipper ceiling so aggressive builds never exceed 0 dBFS.");
-    bypass.setComponentID("bypass"); bypass.setName("Master bypass"); bypass.setClickingTogglesState(true);
+    bypass.setComponentID("bypass"); bypass.setName("Master bypass"); bypass.setTitle("Master bypass"); bypass.setClickingTogglesState(true);
     bypass.setTooltip("Bypass the complete chain. Latency stays at " + juce::String(owner.getLatencySamples()) + " samples.");
-    algorithms.setComponentID("algorithm"); algorithms.setName("Global algorithm");
+    algorithms.setComponentID("algorithm"); algorithms.setName("Global algorithm"); algorithms.setTitle("Algorithm");
     for (int i = 0; i < 4; ++i) algorithms.addItem(sausage::algorithmNames[i], i + 1);
     algorithms.setTooltip("One algorithm set for all four effects. Classic is the original set. Velvet uses atan and a hall. Punch uses clipping and a short room. Prism uses wavefolding and a brighter hall. Knob settings stay put.");
     algorithmAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(owner.parameters, "algorithm", algorithms);

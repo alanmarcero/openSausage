@@ -13,16 +13,19 @@ void styleSearch(juce::TextEditor& editor) {
 }
 }
 SuiteBar::SuiteBar(SausageProcessor& owner) : processor(owner) {
-    const auto add = [](juce::Component& parent, juce::TextButton& button, const juce::String& id, const juce::String& tip) {
+    const auto add = [](juce::Component& parent, juce::TextButton& button, const juce::String& id,
+                        const juce::String& tip, const juce::String& title = {}) {
+        const auto spoken = title.isNotEmpty() ? title : button.getButtonText();
         button.setComponentID(id);
-        button.setName(button.getButtonText());
+        button.setName(spoken);
+        button.setTitle(spoken);
         button.setTooltip(tip);
         parent.addAndMakeVisible(button);
     };
     add(*this, undo, "suiteUndo", "Undo the last control change. Cmd/Ctrl+Z.");
     add(*this, redo, "suiteRedo", "Redo the control change. Shift+Cmd/Ctrl+Z.");
-    add(*this, slotA, "suiteA", "Hear slot A.");
-    add(*this, slotB, "suiteB", "Hear slot B.");
+    add(*this, slotA, "suiteA", "Hear slot A.", "Slot A");
+    add(*this, slotB, "suiteB", "Hear slot B.", "Slot B");
     add(*this, copyAToB, "suiteCopyAToB", "Copy A into B.");
     add(*this, copyBToA, "suiteCopyBToA", "Copy B into A.");
     add(presetRow, presetRow.previous, "suitePrevious", "Previous preset");
@@ -75,6 +78,7 @@ SuiteBar::SuiteBar(SausageProcessor& owner) : processor(owner) {
     auto& browser = presetRow.browser;
     browser.setComponentID("presetBrowser");
     browser.setName("Preset browser");
+    browser.setTitle("Preset browser");
     browser.setTooltip("Factory recipes and presets saved in Documents/Alan Marcero/openSausage/Presets. An asterisk marks unsaved edits.");
     browser.onChange = [this] {
         if (const auto* entry = selected(); entry != nullptr && !rebuilding) load(*entry);
