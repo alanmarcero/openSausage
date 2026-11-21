@@ -1,5 +1,18 @@
 #include "SausageLookAndFeel.h"
 
+namespace {
+// Draws a disabled control at 40% opacity.
+struct DimWhenDisabled {
+    DimWhenDisabled(juce::Graphics& g, const juce::Component& control) : graphics(control.isEnabled() ? nullptr : &g) {
+        if (graphics != nullptr) graphics->beginTransparencyLayer(0.4f);
+    }
+    ~DimWhenDisabled() {
+        if (graphics != nullptr) graphics->endTransparencyLayer();
+    }
+    juce::Graphics* graphics;
+};
+}
+
 SausageLookAndFeel::SausageLookAndFeel() {
     setColourScheme(getDarkColourScheme());
     setColour(juce::TooltipWindow::backgroundColourId, juce::Colour(0xff152026));
@@ -18,6 +31,7 @@ SausageLookAndFeel::SausageLookAndFeel() {
     setColour(juce::PopupMenu::textColourId, juce::Colour(0xffe6f0f5));
 }
 void SausageLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height, float position, float start, float end, juce::Slider& slider) {
+    const DimWhenDisabled dim(g, slider);
     auto bounds = juce::Rectangle<float>(static_cast<float>(x), static_cast<float>(y), static_cast<float>(width), static_cast<float>(height)).reduced(13.0f);
     const auto diameter = juce::jmin(bounds.getWidth(), bounds.getHeight());
     bounds = bounds.withSizeKeepingCentre(diameter, diameter);
@@ -52,6 +66,16 @@ void SausageLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int w
     g.drawLine({center + direction * (radius * 0.38f), center + direction * (radius * 0.77f)}, 4.0f);
     g.fillEllipse(center.x - 3.0f, center.y - 3.0f, 6.0f, 6.0f);
 }
+void SausageLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width, int height, float position, float minimum, float maximum,
+                                          juce::Slider::SliderStyle style, juce::Slider& slider) {
+    const DimWhenDisabled dim(g, slider);
+    LookAndFeel_V4::drawLinearSlider(g, x, y, width, height, position, minimum, maximum, style, slider);
+}
+void SausageLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, bool down, int buttonX, int buttonY, int buttonWidth, int buttonHeight,
+                                      juce::ComboBox& box) {
+    const DimWhenDisabled dim(g, box);
+    LookAndFeel_V4::drawComboBox(g, width, height, down, buttonX, buttonY, buttonWidth, buttonHeight, box);
+}
 void SausageLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& button, const juce::Colour&, bool over, bool down) {
     over = over || button.hasKeyboardFocus(false);
     const auto bounds = button.getLocalBounds().toFloat().reduced(0.5f);
@@ -63,6 +87,7 @@ void SausageLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& b
         g.drawRoundedRectangle(bounds, 5.0f, 1.0f);
         return;
     }
+    const DimWhenDisabled dim(g, button);
     if (button.getComponentID() == "softClip") {
         const auto enabled = button.getToggleState();
         g.setColour(juce::Colour(over || down ? 0xff2a3b40 : 0xff182429));
@@ -104,6 +129,7 @@ void SausageLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& but
         g.drawText(button.getButtonText(), button.getLocalBounds(), juce::Justification::centred);
         return;
     }
+    const DimWhenDisabled dim(g, button);
     if (button.getComponentID() == "softClip") {
         g.setColour(button.getToggleState() ? juce::Colour(0xff48f0c8) : juce::Colour(0xff869ca8));
         g.setFont(juce::FontOptions(13.5f, juce::Font::bold));

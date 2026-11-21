@@ -5,11 +5,25 @@
 namespace {
 const juce::Colour ink(0xffe6f0f5), cream(0xffe6f0f5), panel(0xf2152026);
 constexpr int designWidth = 1160, designHeight = 760;
+const juce::String masterBypassHint {"Turn off Master bypass to use this."};
 void text(juce::Graphics& g, const juce::String& value, juce::Rectangle<int> box, float height,
           juce::Colour color = ink, int style = juce::Font::plain, juce::Justification align = juce::Justification::centredLeft) {
     g.setColour(color);
     g.setFont(juce::FontOptions(height, style));
     g.drawText(value, box, align);
+}
+// Draws a control at 40% opacity while its setting has no effect, and adds what turns it on to its tooltip.
+// off names a bypass that silences the control, and wins over hint.
+void showEffect(juce::Component& control, const juce::String& off, bool hasNoEffect, const juce::String& hint) {
+    auto reason = hasNoEffect ? hint : juce::String();
+    if (off.isNotEmpty()) reason = off;
+    auto& tips = dynamic_cast<juce::SettableTooltipClient&>(control);
+    auto& properties = control.getProperties();
+    if (!properties.contains("tooltip")) properties.set("tooltip", tips.getTooltip());
+    auto tooltip = properties["tooltip"].toString();
+    if (reason.isNotEmpty()) tooltip << " " << reason;
+    control.setAlpha(reason.isEmpty() ? 1.0f : 0.4f);
+    if (tips.getTooltip() != tooltip) tips.setTooltip(tooltip);
 }
 void dial(juce::Slider& slider, const juce::String& id, juce::Colour accent) {
     slider.setComponentID(id);
@@ -199,6 +213,23 @@ void ModulePanel::setBeatPhase(float position) {
     shownDisplay = display;
     phase = position;
 }
+void ModulePanel::dimInactive() {
+    juce::String off;
+    if (moduleBypass->load() > 0.5f) off = "Turn on " + title + " to use this.";
+    if (masterBypass->load() > 0.5f) off = masterBypassHint;
+    const bool amountIsZero = amount->load() <= 0.0f, detailIsZero = detail->load() <= 0.0f;
+    const auto raise = [](const juce::String& knob) { return "Raise " + knob + " to hear this."; };
+    showEffect(primary, off, kind == 2 && detailIsZero, raise(secondaryLabel));
+    showEffect(secondary, off, (kind == 1 || kind == 3) && amountIsZero, raise(primaryLabel));
+    showEffect(bypass, masterBypass->load() > 0.5f ? masterBypassHint : juce::String(), false, {});
+    if (kind == 0) {
+        showEffect(saturationMix, off, amountIsZero && detailIsZero, "Raise Fatness or Color to hear this.");
+        showEffect(dynamics, off, amountIsZero, raise(primaryLabel));
+        showEffect(focus, off, amountIsZero, raise(primaryLabel));
+    }
+    if (kind == 1) showEffect(preDelay, off, amountIsZero, raise(primaryLabel));
+    if (kind == 2) showEffect(riseLength, off, detailIsZero, raise(secondaryLabel));
+}
 void ModulePanel::resized() {
     bypass.setBounds(154, 20, 94, 36);
     if (kind == 0) {
@@ -278,7 +309,16 @@ bool SausageEditor::keyPressed(const juce::KeyPress& key) {
 }
 void SausageEditor::timerCallback() {
     suite.refresh();
-    for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) p->setBeatPhase(animationPhase());
+    for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) {
+        p->setBeatPhase(animationPhase());
+        p->dimInactive();
+    }
+    const auto off = ownerProcessor.parameters.getRawParameterValue("bypass")->load() > 0.5f ? masterBypassHint : juce::String();
+    const bool dry = ownerProcessor.parameters.getRawParameterValue("masterMix")->load() <= 0.0f;
+    showEffect(output, off, dry, "Raise Rack mix to hear this.");
+    showEffect(softClip, off, dry, "Raise Rack mix to hear this.");
+    showEffect(masterMix, off, false, {});
+    showEffect(algorithms, off, false, {});
     content.repaint(20, 4, 175, 160);
     const auto now = juce::Time::getMillisecondCounterHiRes();
     inputMeter.push(ownerProcessor.inputPeak.exchange(0.0f), now);
