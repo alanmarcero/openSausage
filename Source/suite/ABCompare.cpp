@@ -1,5 +1,15 @@
 #include "ABCompare.h"
 
+class ABCompare::LabelAction final : public juce::UndoableAction {
+public:
+    LabelAction(ABCompare& ownerIn, Label next) : owner(ownerIn), before(ownerIn.label()), after(std::move(next)) {}
+    bool perform() override { owner.setLabel(after); return true; }
+    bool undo() override { owner.setLabel(before); return true; }
+private:
+    ABCompare& owner;
+    Label before, after;
+};
+
 ABCompare::ABCompare(juce::AudioProcessorValueTreeState& state, ParameterUndo& undo)
     : parameters(state), history(undo), inactive(capture()) {}
 
@@ -36,6 +46,7 @@ void ABCompare::copyRaw(bool aToB) {
     const int destination = aToB ? 1 : 0;
     if (destination == active) applyTree(source);
     else inactive = source.createCopy();
+    labels[static_cast<std::size_t>(destination)] = labels[static_cast<std::size_t>(1 - destination)];
     history.clearHistory(destination);
 }
 void ABCompare::toggle() {
@@ -46,22 +57,33 @@ void ABCompare::toggle() {
     active = active == 0 ? 1 : 0;
     history.selectHistory(active);
 }
+void ABCompare::setLabel(Label next) { labels[static_cast<std::size_t>(active)] = std::move(next); }
+void ABCompare::relabel(Label next) { history.perform(new LabelAction(*this, std::move(next))); }
 void ABCompare::copyAToB() { copyRaw(true); }
 void ABCompare::copyBToA() { copyRaw(false); }
 void ABCompare::write(juce::ValueTree& state) const {
     state.setProperty("ab", active, nullptr);
+    state.setProperty("presetName", label().name, nullptr);
+    state.setProperty("presetEdited", label().edited, nullptr);
     auto slot = inactive.createCopy();
     if (!slot.hasType("inactiveSlot")) {
         juce::ValueTree wrapped("inactiveSlot");
         wrapped.copyPropertiesAndChildrenFrom(inactive, nullptr);
         slot = wrapped;
     }
+    const auto& other = labels[static_cast<std::size_t>(1 - active)];
+    slot.setProperty("presetName", other.name, nullptr);
+    slot.setProperty("presetEdited", other.edited, nullptr);
     if (auto existing = state.getChildWithName("inactiveSlot"); existing.isValid())
         state.removeChild(existing, nullptr);
     state.appendChild(slot, nullptr);
 }
-void ABCompare::install(int slot, juce::ValueTree savedInactive) {
+void ABCompare::install(int slot, juce::ValueTree savedInactive, Label live) {
     active = slot == 1 ? 1 : 0;
     history.selectHistory(active);
     inactive = savedInactive.isValid() && savedInactive.getNumChildren() > 0 ? std::move(savedInactive) : capture();
+    // A slot saved without a label, or a fresh one, takes the audible slot's label.
+    labels[static_cast<std::size_t>(1 - active)] = {inactive.getProperty("presetName", live.name).toString(),
+                                                    static_cast<bool>(inactive.getProperty("presetEdited", live.edited))};
+    labels[static_cast<std::size_t>(active)] = std::move(live);
 }

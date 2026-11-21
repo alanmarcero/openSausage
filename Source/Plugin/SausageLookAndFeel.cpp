@@ -58,13 +58,6 @@ void SausageLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& b
         g.drawRoundedRectangle(bounds, 5.0f, 1.0f);
         return;
     }
-    if (button.getComponentID() == "prevRecipe" || button.getComponentID() == "nextRecipe") {
-        g.setColour(juce::Colour(over || down ? 0xff2a3b40 : 0xff182429));
-        g.fillRoundedRectangle(bounds, 5.0f);
-        g.setColour(juce::Colour(0xff283842));
-        g.drawRoundedRectangle(bounds, 5.0f, 1.0f);
-        return;
-    }
     if (button.getComponentID() == "softClip") {
         const auto enabled = button.getToggleState();
         g.setColour(juce::Colour(over || down ? 0xff2a3b40 : 0xff182429));
@@ -85,15 +78,24 @@ void SausageLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& b
     g.fillEllipse(10.0f, static_cast<float>(button.getHeight()) / 2.0f - 3.0f, 6.0f, 6.0f);
 }
 void SausageLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& button, bool, bool) {
-    if (button.getComponentID().startsWith("suite")) {
+    const auto id = button.getComponentID();
+    if (id.startsWith("suite")) {
         g.setColour(button.isEnabled() ? (button.getToggleState() ? juce::Colour(0xff48f0c8) : juce::Colour(0xffe6f0f5)) : juce::Colour(0xff536266));
+        const auto centre = button.getLocalBounds().toFloat().getCentre();
+        juce::Path icon;
+        if (id == "suiteFavorite") {
+            icon.addStar(centre, 5, 5.0f, 11.0f);
+            if (button.getToggleState()) g.fillPath(icon);
+            g.strokePath(icon, juce::PathStrokeType(1.6f));
+            return;
+        }
+        if (id == "suitePrevious" || id == "suiteNext") {
+            const float pointing = id == "suiteNext" ? 1.0f : -1.0f;
+            icon.addTriangle(centre.x - 5.0f * pointing, centre.y - 7.0f, centre.x - 5.0f * pointing, centre.y + 7.0f, centre.x + 6.0f * pointing, centre.y);
+            g.fillPath(icon);
+            return;
+        }
         g.setFont(juce::FontOptions(12.5f, juce::Font::bold));
-        g.drawText(button.getButtonText(), button.getLocalBounds(), juce::Justification::centred);
-        return;
-    }
-    if (button.getComponentID() == "prevRecipe" || button.getComponentID() == "nextRecipe") {
-        g.setColour(juce::Colour(0xffe6f0f5));
-        g.setFont(juce::FontOptions(14.0f, juce::Font::bold));
         g.drawText(button.getButtonText(), button.getLocalBounds(), juce::Justification::centred);
         return;
     }

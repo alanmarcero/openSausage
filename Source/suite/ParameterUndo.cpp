@@ -76,6 +76,7 @@ void ParameterUndo::commit(std::vector<Change> changes, bool startTransaction) {
     if (changes.empty()) return;
     if (startTransaction) manager->beginNewTransaction();
     manager->perform(new Action(*this, std::move(changes)));
+    if (onCommit) onCommit();
 }
 void ParameterUndo::apply(const std::vector<Change>& changes, bool useTo) {
     const juce::ScopedValueSetter<bool> guard(applying, true);

@@ -118,6 +118,8 @@ int runOpenSausageSuiteTests() {
     processor.setStateInformation(legacyData.getData(), static_cast<int>(legacyData.getSize()));
     require(std::abs(raw(processor, "riseLength")) < 0.05f, "Old session did not default Rise Length to Free");
     require(processor.getCurrentProgram() == 0, "Old session did not default the program");
+    require(processor.compare.label().name == "Uplifting / Clean Slate" && processor.compare.label().edited,
+        "Old session claimed an unedited preset");
 
     SausageProcessor edits;
     auto* fatness = edits.parameters.getParameter("fatness");
@@ -202,7 +204,8 @@ int runOpenSausageSuiteTests() {
     SausageProcessor presetTarget;
     setDenormalised(presetTarget, "fatness", 3.0f);
     setDenormalised(presetTarget, "color", 9.0f);
-    presetTarget.loadParameterTree(*loaded);
+    presetTarget.loadParameterTree(*loaded, "My Glue 2");
+    require(presetTarget.compare.label().name == "My Glue 2" && !presetTarget.compare.label().edited, "Loading a preset did not show its name");
     require(std::abs(raw(presetTarget, "fatness") - raw(slotsRestored, "fatness")) < 0.05f, "Loaded preset did not restore Fatness");
     presetTarget.history.undo();
     require(std::abs(raw(presetTarget, "fatness") - 3.0f) < 0.05f && std::abs(raw(presetTarget, "color") - 9.0f) < 0.05f,
@@ -235,6 +238,25 @@ int runOpenSausageSuiteTests() {
         search->onReturnKey();
         require(!barFolder.getChildFile("acid.preset").exists(), "Return in the search created a preset");
         require(std::abs(raw(bar, "fatness") - 64.0f) < 0.05f, "Return did not load Rolling / Acid Top Grit");
+        auto* browser = dynamic_cast<juce::ComboBox*>(find(*editor, "presetBrowser"));
+        auto* previous = dynamic_cast<juce::TextButton*>(find(*editor, "suitePrevious"));
+        auto* next = dynamic_cast<juce::TextButton*>(find(*editor, "suiteNext"));
+        auto* suiteBar = dynamic_cast<SuiteBar*>(saveButton->getParentComponent());
+        require(browser && previous && next && suiteBar, "Preset browser, Previous, or Next missing");
+        require(bar.compare.label().name == "Rolling / Acid Top Grit" && !bar.compare.label().edited, "Loading did not show the preset name");
+        next->onClick();
+        require(bar.compare.label().name == "Tech / Peak Acid Bite", "Next did not step through the browser list");
+        next->onClick();
+        require(bar.compare.label().name == "Rolling / Acid Top Grit", "Next did not wrap to the first preset");
+        previous->onClick();
+        require(bar.compare.label().name == "Tech / Peak Acid Bite", "Previous did not wrap to the last preset");
+        bar.history.undo();
+        require(bar.compare.label().name == "Rolling / Acid Top Grit", "Undo did not restore the previous preset name");
+        setDenormalised(bar, "color", 20.0f);
+        suiteBar->refresh();
+        require(bar.compare.label().edited && browser->getText() == "Rolling / Acid Top Grit *", "An edit did not mark the preset name");
+        bar.history.undo();
+        require(!bar.compare.label().edited, "Undoing the only edit kept the edited mark");
         presetName->setText("My Bass", false);
         saveButton->onClick();
         require(std::abs(storedValue(bar.presets, "My Bass", "fatness") - 77.0f) < 0.05f && saveButton->getButtonText() == "Replace?",
@@ -242,6 +264,7 @@ int runOpenSausageSuiteTests() {
         saveButton->onClick();
         require(std::abs(storedValue(bar.presets, "My Bass", "fatness") - 64.0f) < 0.05f, "The second Save click did not replace the preset");
         require(status->getText() == "Saved My Bass.", "Save did not report in the status line");
+        require(bar.compare.label().name == "My Bass" && !bar.compare.label().edited, "Save did not show the saved name");
         deleteButton->onClick();
         require(barFolder.getChildFile("My Bass.preset").existsAsFile() && deleteButton->getButtonText() == "Delete?",
             "Delete removed a preset without asking");
@@ -276,6 +299,21 @@ int runOpenSausageSuiteTests() {
     auto* riseText = formats.parameters.getParameter("rise");
     require(riseText->getText(1.0f, 0) == "+12.0 st", "Rise is not shown in semitones");
     require(riseText->getText(riseText->getValueForText("7 st"), 0) == "+7.0 st", "Rise does not accept semitones");
+
+    SausageProcessor labels;
+    labels.applyRecipe(4);
+    setDenormalised(labels, "fatness", 12.0f);
+    labels.compare.toggle();
+    require(labels.compare.label().name == "Uplifting / Clean Slate" && !labels.compare.label().edited, "B showed the preset name of A");
+    labels.compare.toggle();
+    require(labels.compare.label().name == "Uplifting / Lift Off" && labels.compare.label().edited, "A lost its preset name or edited mark");
+    juce::MemoryBlock labelState;
+    labels.getStateInformation(labelState);
+    SausageProcessor labelsRestored;
+    labelsRestored.setStateInformation(labelState.getData(), static_cast<int>(labelState.getSize()));
+    require(labelsRestored.compare.label().name == "Uplifting / Lift Off" && labelsRestored.compare.label().edited, "Session lost the preset name");
+    labelsRestored.compare.toggle();
+    require(labelsRestored.compare.label().name == "Uplifting / Clean Slate", "Session lost the preset name of B");
 
     SausageProcessor sized;
     {
