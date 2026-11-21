@@ -9,7 +9,7 @@ void styleSearch(juce::TextEditor& editor) {
     editor.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour(0xff48f0c8));
     editor.setJustification(juce::Justification::centredLeft);
     editor.setIndents(6, 2);
-    editor.setFont(juce::FontOptions(13.0f));
+    editor.setFont(juce::FontOptions(14.0f));
 }
 }
 SuiteBar::SuiteBar(SausageProcessor& owner) : processor(owner) {
@@ -87,28 +87,30 @@ void SuiteBar::paint(juce::Graphics& graphics) {
     graphics.fillRect(getLocalBounds());
 }
 void SuiteBar::resized() {
-    auto row = getLocalBounds().reduced(8, 3);
+    // The right end stays clear of the editor's resize corner.
+    auto row = getLocalBounds().reduced(8, 4).withTrimmedRight(32);
     const auto take = [&row](int width) {
         const auto area = row.removeFromLeft(width);
         row.removeFromLeft(4);
         return area;
     };
-    undo.setBounds(take(58));
-    redo.setBounds(take(58));
-    row.removeFromLeft(6);
-    slotA.setBounds(take(32));
-    slotB.setBounds(take(32));
-    copyAToB.setBounds(take(52));
-    copyBToA.setBounds(take(52));
+    undo.setBounds(take(64));
+    redo.setBounds(take(64));
     row.removeFromLeft(8);
-    search.setBounds(take(140));
-    deleteButton.setBounds(row.removeFromRight(70));
+    slotA.setBounds(take(40));
+    slotB.setBounds(take(40));
+    copyAToB.setBounds(take(108));
+    copyBToA.setBounds(take(108));
+    row.removeFromLeft(8);
+    search.setBounds(take(180));
+    row.removeFromLeft(8);
+    deleteButton.setBounds(row.removeFromRight(76));
     row.removeFromRight(4);
-    renameButton.setBounds(row.removeFromRight(76));
+    renameButton.setBounds(row.removeFromRight(84));
     row.removeFromRight(4);
-    save.setBounds(row.removeFromRight(70));
+    save.setBounds(row.removeFromRight(84));
     row.removeFromRight(4);
-    name.setBounds(row.removeFromRight(160));
+    name.setBounds(row);
 }
 const PresetLibrary::Entry* SuiteBar::selected() const {
     const auto id = presetRow.browser.getSelectedId();

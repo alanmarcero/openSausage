@@ -3,7 +3,7 @@
 
 namespace {
 const juce::Colour ink(0xffe6f0f5), cream(0xffe6f0f5), panel(0xf2152026);
-constexpr int designWidth = 1160, designHeight = 720;
+constexpr int designWidth = 1160, designHeight = 760;
 void text(juce::Graphics& g, const juce::String& value, juce::Rectangle<int> box, float height,
           juce::Colour color = ink, int style = juce::Font::plain, juce::Justification align = juce::Justification::centredLeft) {
     g.setColour(color);
@@ -275,7 +275,7 @@ void SausageEditor::paintContent(juce::Graphics& g) {
     text(g, "Algorithm", {532, 81, 145, 20}, 14.0f, ink, juce::Font::bold);
     text(g, "Preset", {706, 81, 412, 20}, 14.0f, ink, juce::Font::bold);
     text(g, "ALAN MARCERO", {930, 31, 196, 24}, 15.0f, ink, juce::Font::bold, juce::Justification::centredRight);
-    g.setColour(juce::Colour(0xf00c1418)); g.fillRect(0, 609, 1160, 111);
+    g.setColour(juce::Colour(0xf00c1418)); g.fillRect(0, 609, designWidth, designHeight - 609);
     g.setColour(juce::Colour(0xff48f0c8).withAlpha(0.4f)); g.drawHorizontalLine(609, 24, 1136);
     meter(g, "INPUT", ownerProcessor.inputPeak.load(std::memory_order_relaxed), 30);
     meter(g, "OUTPUT", ownerProcessor.outputPeak.load(std::memory_order_relaxed), 214);
@@ -283,7 +283,7 @@ void SausageEditor::paintContent(juce::Graphics& g) {
     text(g, "Rack mix", {562, 638, 74, 22}, 13.0f, cream, juce::Font::bold);
     text(g, "Compression", {738, 623, 126, 22}, 13.0f, cream, juce::Font::bold);
     text(g, juce::String(ownerProcessor.gainReduction.load(std::memory_order_relaxed), 1) + " dB", {738, 646, 126, 28}, 21.0f, juce::Colour(0xffffbe3b), juce::Font::bold);
-    g.setColour(juce::Colour(0xff3b474a)); g.drawHorizontalLine(687, 24, 1136);
+    g.setColour(juce::Colour(0xff3b474a)); g.drawHorizontalLine(715, 24, 1136);
     for (const auto point : {juce::Point<float>(10, 10), juce::Point<float>(1150, 10), juce::Point<float>(10, 600), juce::Point<float>(1150, 600)}) {
         g.setColour(ink.withAlpha(0.45f)); g.fillEllipse(point.x - 3, point.y - 3, 6, 6);
         g.setColour(juce::Colour(0xffd8b15a)); g.drawLine(point.x - 2, point.y, point.x + 2, point.y, 1);
@@ -297,6 +297,6 @@ void SausageEditor::resized() {
     output.setBounds(456, 611, 96, 74); masterMix.setBounds(632, 611, 96, 74);
     softClip.setBounds(864, 633, 112, 36); bypass.setBounds(986, 633, 146, 36);
     algorithms.setBounds(532, 104, 158, 36);
-    suite.setBounds(0, 688, 1160, 32);
+    suite.setBounds(0, 716, 1160, 44);
     suite.presetRow.setBounds(706, 102, 426, 66);
 }

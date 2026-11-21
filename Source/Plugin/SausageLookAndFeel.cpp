@@ -95,7 +95,7 @@ void SausageLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& but
             g.fillPath(icon);
             return;
         }
-        g.setFont(juce::FontOptions(12.5f, juce::Font::bold));
+        g.setFont(juce::FontOptions(14.0f, juce::Font::bold));
         g.drawText(button.getButtonText(), button.getLocalBounds(), juce::Justification::centred);
         return;
     }
