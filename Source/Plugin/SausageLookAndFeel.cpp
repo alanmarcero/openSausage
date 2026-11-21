@@ -132,7 +132,7 @@ void SausageLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& but
     const DimWhenDisabled dim(g, button);
     if (button.getComponentID() == "softClip") {
         g.setColour(button.getToggleState() ? juce::Colour(0xff48f0c8) : juce::Colour(0xff869ca8));
-        g.setFont(juce::FontOptions(13.5f, juce::Font::bold));
+        g.setFont(juce::FontOptions(14.0f, juce::Font::bold));
         g.drawText("Soft Clip", button.getLocalBounds().withTrimmedLeft(20), juce::Justification::centred);
         return;
     }
