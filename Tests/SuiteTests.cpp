@@ -12,6 +12,11 @@ void setDenormalised(SausageProcessor& processor, const char* id, float value) {
     parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
     parameter->endChangeGesture();
 }
+float storedValue(const PresetLibrary& library, const juce::String& preset, const char* id) {
+    const auto tree = library.loadUser(preset);
+    if (!tree) return -1.0f;
+    return tree->getChildWithProperty("id", id).getProperty("value");
+}
 juce::Component* find(juce::Component& root, const juce::String& id) {
     if (root.getComponentID() == id) return &root;
     for (auto* child : root.getChildren()) if (auto* match = find(*child, id)) return match;
@@ -187,6 +192,45 @@ int runOpenSausageSuiteTests() {
     if (!library.remove("My Glue 2", error)) throw std::runtime_error(error.toStdString());
     require(library.entries("my glue").empty(), "Deleted preset is still listed");
     folder.deleteRecursively();
+
+    auto barFolder = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("openSausage-suite-bar");
+    barFolder.deleteRecursively();
+    SausageProcessor bar(barFolder);
+    setDenormalised(bar, "fatness", 77.0f);
+    if (!bar.presets.save("My Bass", bar.copyParameterTree(), error)) throw std::runtime_error(error.toStdString());
+    setDenormalised(bar, "fatness", 10.0f);
+    {
+        std::unique_ptr<juce::AudioProcessorEditor> editor(bar.createEditor());
+        auto* search = dynamic_cast<juce::TextEditor*>(find(*editor, "presetSearch"));
+        auto* presetName = dynamic_cast<juce::TextEditor*>(find(*editor, "presetName"));
+        auto* saveButton = dynamic_cast<juce::TextButton*>(find(*editor, "suiteSave"));
+        auto* deleteButton = dynamic_cast<juce::TextButton*>(find(*editor, "suiteDelete"));
+        auto* status = dynamic_cast<juce::Label*>(find(*editor, "presetStatus"));
+        require(search && presetName && saveButton && deleteButton && status, "Preset search, name, Save, Delete, or status missing");
+        search->setText("My Bass", false);
+        search->onTextChange();
+        search->onReturnKey();
+        require(std::abs(raw(bar, "fatness") - 77.0f) < 0.05f, "Return in the search did not load the first match");
+        require(std::abs(storedValue(bar.presets, "My Bass", "fatness") - 77.0f) < 0.05f, "Return in the search overwrote the preset");
+        search->setText("acid", false);
+        search->onTextChange();
+        search->onReturnKey();
+        require(!barFolder.getChildFile("acid.preset").exists(), "Return in the search created a preset");
+        require(std::abs(raw(bar, "fatness") - 64.0f) < 0.05f, "Return did not load Rolling / Acid Top Grit");
+        presetName->setText("My Bass", false);
+        saveButton->onClick();
+        require(std::abs(storedValue(bar.presets, "My Bass", "fatness") - 77.0f) < 0.05f && saveButton->getButtonText() == "Replace?",
+            "Save replaced a preset without asking");
+        saveButton->onClick();
+        require(std::abs(storedValue(bar.presets, "My Bass", "fatness") - 64.0f) < 0.05f, "The second Save click did not replace the preset");
+        require(status->getText() == "Saved My Bass.", "Save did not report in the status line");
+        deleteButton->onClick();
+        require(barFolder.getChildFile("My Bass.preset").existsAsFile() && deleteButton->getButtonText() == "Delete?",
+            "Delete removed a preset without asking");
+        deleteButton->onClick();
+        require(!barFolder.getChildFile("My Bass.preset").existsAsFile(), "The second Delete click did not remove the preset");
+    }
+    barFolder.deleteRecursively();
 
     SausageProcessor pitch;
     setDenormalised(pitch, "rise", 100.0f);

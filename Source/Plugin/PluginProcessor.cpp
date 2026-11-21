@@ -34,11 +34,11 @@ std::vector<juce::String> recipeNames() {
     return names;
 }
 }
-SausageProcessor::SausageProcessor()
+SausageProcessor::SausageProcessor(juce::File presetFolder)
     : AudioProcessor(BusesProperties().withInput("Input", juce::AudioChannelSet::stereo(), true).withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters(*this, nullptr, "openSausageState", layout()),
       history(*this), compare(parameters, history),
-      presets(PresetLibrary::userDirectory("openSausage"), recipeNames()) {
+      presets(std::move(presetFolder), recipeNames()) {
     static_assert(std::size(ids) == parameterCount);
     for (std::size_t i = 0; i < values.size(); ++i) values[i] = parameters.getRawParameterValue(ids[i]);
     setLatencySamples(sausage::Core::latency);
