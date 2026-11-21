@@ -12,7 +12,7 @@ All modes retain the stereo-linked compressor, Color emphasis, DC blocker, and 4
 | Punch | `clamp(x, -1, 1)` | `x*x/2` inside ±1, otherwise `abs(x)-1/2` |
 | Prism | `sin(x)` | `1-cos(x)` |
 
-Double-precision antiderivatives and a midpoint fallback for nearly equal consecutive inputs avoid division instability. Prism folds the signal as drive increases; its loudness is deliberately non-monotonic. Antialiasing reduces artifacts rather than guaranteeing an alias-free result. First-order ADAA also averages over half an oversampled sample, introducing a small high-frequency rolloff and approximately 0.125 base-rate samples of extra wet-path group delay at low levels. The host delay and neutral/bypassed paths remain 16 samples.
+Double-precision antiderivatives and a midpoint fallback for nearly equal consecutive inputs avoid division instability. Prism folds the signal as drive increases; its loudness is deliberately non-monotonic. Antialiasing reduces artifacts rather than guaranteeing an alias-free result. First-order ADAA also averages over half an oversampled sample, introducing a small high-frequency rolloff and approximately 0.125 base-rate samples of extra wet-path group delay at low levels. The host delay and neutral/bypassed paths remain 87 samples.
 
 Source: Parker, Zavalishin, and Le Bivic, [Reducing the aliasing of nonlinear waveshaping using continuous-time convolution](https://www.dafx.de/paper-archive/2016/dafxpapers/20-DAFx-16_paper_41-PN.pdf), DAFx 2016, especially the rectangular-kernel method and hard-clipper example. Atan and sine antiderivatives are derived here; no source code was copied.
 
@@ -42,7 +42,7 @@ Source: [Decorrelation for Immersive Audio Applications and Sound Effects](https
 
 The `algorithm` choice is appended to the existing host parameters with version hint 2; earlier parameter IDs and choice index 0 (Classic) remain stable. State without the choice restores Classic even when loaded into an instance previously using another mode. Recipes leave the global choice alone.
 
-Two engines are allocated during preparation. Normally only one runs; a mode change resets the spare, primes its 16-sample dry delay, and crossfades for 20 ms. No allocations occur in the audio callback. Changes arriving during a fade are coalesced into the latest requested mode. Mode changes discard the old tail through the fade. CPU temporarily increases during switching; reverb and pitch effects still have their inherent wet delays.
+Two engines are allocated during preparation. Normally only one runs; a mode change resets the spare, primes its 87-sample dry delay, and crossfades for 20 ms. No allocations occur in the audio callback. Changes arriving during a fade are coalesced into the latest requested mode. Mode changes discard the old tail through the fade. CPU temporarily increases during switching; reverb and pitch effects still have their inherent wet delays.
 
 ## Verification
 
