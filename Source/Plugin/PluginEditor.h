@@ -5,16 +5,18 @@
 
 class ModulePanel final : public juce::Component {
 public:
-    ModulePanel(juce::AudioProcessorValueTreeState&, const juce::String& title, const juce::String& subtitle,
+    ModulePanel(SausageProcessor&, const juce::String& title, const juce::String& subtitle,
                 const juce::String& primaryId, const juce::String& primaryLabel, const juce::String& secondaryId,
                 const juce::String& secondaryLabel, const juce::String& bypassId, juce::Colour accent, const juce::String& hint);
     void paint(juce::Graphics&) override;
+    void paintOverChildren(juce::Graphics&) override;
     void resized() override;
     // Repaints the subtitle, LED, and beat display when what they show changed.
     void setBeatPhase(float position);
     // Dims the controls whose setting has no effect right now.
     void dimInactive();
 private:
+    SausageProcessor& processor;
     juce::String title, subtitle, primaryLabel, secondaryLabel, hint;
     juce::Colour accent;
     std::atomic<float>* amount;
@@ -63,12 +65,22 @@ private:
     struct Content final : juce::Component {
         explicit Content(SausageEditor& owner) : editor(owner) {}
         void paint(juce::Graphics& g) override { editor.paintContent(g); }
+        void paintOverChildren(juce::Graphics& g) override { editor.paintContentOverChildren(g); }
+        SausageEditor& editor;
+    };
+    struct ParamLockListener final : juce::MouseListener {
+        explicit ParamLockListener(SausageEditor& owner) : editor(owner) {}
+        void mouseDown(const juce::MouseEvent&) override;
         SausageEditor& editor;
     };
     void timerCallback() override;
     void paintContent(juce::Graphics&);
+    void paintContentOverChildren(juce::Graphics&);
+    uint32_t lockMask() const noexcept;
     SausageProcessor& ownerProcessor;
     Content content {*this};
+    ParamLockListener lockListener {*this};
+    uint32_t lastLockMask = 0;
     SausageLookAndFeel look;
     std::unique_ptr<juce::Drawable> grill;
     juce::Image enamel;

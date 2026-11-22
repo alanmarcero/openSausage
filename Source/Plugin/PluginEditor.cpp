@@ -38,6 +38,36 @@ void dial(juce::Slider& slider, const juce::String& id, juce::Colour accent) {
     slider.setDoubleClickReturnValue(true, id == "size" || id == "spread" ? 50.0 : 0.0);
     slider.setWantsKeyboardFocus(true);
 }
+void drawPadlock(juce::Graphics& g, juce::Rectangle<float> box) {
+    constexpr float w = 10.0f, h = 12.0f;
+    const float x = box.getX() + (box.getWidth() - w) * 0.5f;
+    const float y = box.getY() + (box.getHeight() - h) * 0.5f;
+    g.setColour(juce::Colour(0xffffbe3b));
+    juce::Path shackle;
+    shackle.addArc(x + 2.0f, y + 0.5f, 6.0f, 6.0f, -juce::MathConstants<float>::halfPi, juce::MathConstants<float>::halfPi, true);
+    shackle.startNewSubPath(x + 2.0f, y + 3.5f);
+    shackle.lineTo(x + 2.0f, y + 5.5f);
+    shackle.startNewSubPath(x + 8.0f, y + 3.5f);
+    shackle.lineTo(x + 8.0f, y + 5.5f);
+    g.strokePath(shackle, juce::PathStrokeType(1.4f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    g.fillRoundedRectangle(x + 0.5f, y + 5.0f, 9.0f, 6.5f, 1.5f);
+    g.setColour(juce::Colour(0xff152026));
+    g.fillEllipse(x + 4.0f, y + 7.2f, 2.0f, 2.2f);
+}
+void paintLockedIndicators(juce::Graphics& g, const juce::Component& container, const SausageProcessor& processor) {
+    for (const auto* child : container.getChildren()) {
+        if (!child->isVisible()) continue;
+        const auto id = child->getComponentID();
+        if (id.isEmpty() || !processor.isParamLocked(id)) continue;
+        const auto bounds = child->getBounds().toFloat();
+        const auto* slider = dynamic_cast<const juce::Slider*>(child);
+        const bool isLinear = slider != nullptr && slider->getSliderStyle() == juce::Slider::LinearHorizontal;
+        const juce::Rectangle<float> badge = isLinear
+            ? juce::Rectangle<float>(bounds.getX() + 2.0f, bounds.getY() + 1.0f, 12.0f, 13.0f)
+            : juce::Rectangle<float>(bounds.getRight() - 14.0f, bounds.getY() + 2.0f, 12.0f, 13.0f);
+        drawPadlock(g, badge);
+    }
+}
 }
 LevelMeter::LevelMeter(juce::String name) : label(std::move(name)) {}
 void LevelMeter::push(float peak, double nowMs) {
@@ -74,13 +104,14 @@ void LevelMeter::mouseDown(const juce::MouseEvent&) {
     clipped = false;
     repaint();
 }
-ModulePanel::ModulePanel(juce::AudioProcessorValueTreeState& state, const juce::String& name, const juce::String& sub,
+ModulePanel::ModulePanel(SausageProcessor& proc, const juce::String& name, const juce::String& sub,
                          const juce::String& primaryId, const juce::String& primaryName, const juce::String& secondaryId,
                          const juce::String& secondaryName, const juce::String& bypassId, juce::Colour color, const juce::String& description)
-    : title(name), subtitle(sub), primaryLabel(primaryName), secondaryLabel(secondaryName), hint(description), accent(color),
-      amount(state.getRawParameterValue(primaryId)), detail(state.getRawParameterValue(secondaryId)),
-      moduleBypass(state.getRawParameterValue(bypassId)), masterBypass(state.getRawParameterValue("bypass")), algorithm(state.getRawParameterValue("algorithm")),
-      primaryAttachment(state, primaryId, primary), secondaryAttachment(state, secondaryId, secondary), bypassAttachment(state, bypassId, bypass) {
+    : processor(proc), title(name), subtitle(sub), primaryLabel(primaryName), secondaryLabel(secondaryName), hint(description), accent(color),
+      amount(proc.parameters.getRawParameterValue(primaryId)), detail(proc.parameters.getRawParameterValue(secondaryId)),
+      moduleBypass(proc.parameters.getRawParameterValue(bypassId)), masterBypass(proc.parameters.getRawParameterValue("bypass")), algorithm(proc.parameters.getRawParameterValue("algorithm")),
+      primaryAttachment(proc.parameters, primaryId, primary), secondaryAttachment(proc.parameters, secondaryId, secondary), bypassAttachment(proc.parameters, bypassId, bypass) {
+    auto& state = processor.parameters;
     kind = primaryId == "space" ? 1 : primaryId == "rise" ? 2 : primaryId == "width" ? 3 : 0;
     dial(primary, primaryId, color); dial(secondary, secondaryId, color);
     primary.setTitle(primaryName);
@@ -210,6 +241,9 @@ void ModulePanel::paint(juce::Graphics& g) {
         g.drawLine(142.0f, 396.0f, 232.0f, 396.0f, 0.7f);
     }
 }
+void ModulePanel::paintOverChildren(juce::Graphics& g) {
+    paintLockedIndicators(g, *this, processor);
+}
 void ModulePanel::setBeatPhase(float position) {
     const bool bypassed = moduleBypass->load() > 0.5f || masterBypass->load() > 0.5f;
     const auto value = bypassed ? 0.0f : amount->load();
@@ -256,10 +290,10 @@ void ModulePanel::resized() {
 SausageEditor::SausageEditor(SausageProcessor& owner)
     : AudioProcessorEditor(owner), ownerProcessor(owner),
       enamel(juce::ImageCache::getFromMemory(BinaryData::analogcyberfaceplate_png, BinaryData::analogcyberfaceplate_pngSize)),
-      sausagePanel(owner.parameters, "Sausage", "SATURATION + COMPRESSION", "fatness", "Fatness", "color", "Color", "sausageBypass", juce::Colour(0xff48f0c8), "4x saturation and compression."),
-      spacePanel(owner.parameters, "Space", "STEREO REVERB", "space", "Mix", "size", "Size", "spaceBypass", juce::Colour(0xff48f0c8), "Reverb mix. Size sets decay."),
-      risePanel(owner.parameters, "Rise", "PITCH + BUILDUP", "rise", "Rise", "riseMix", "Mix", "riseBypass", juce::Colour(0xff48f0c8), "Pitch shift, up to an octave."),
-      widthPanel(owner.parameters, "Width", "STEREO WIDENER", "width", "Width", "spread", "Spread", "widthBypass", juce::Colour(0xff48f0c8), "Stereo width and spacing."),
+      sausagePanel(owner, "Sausage", "SATURATION + COMPRESSION", "fatness", "Fatness", "color", "Color", "sausageBypass", juce::Colour(0xff48f0c8), "4x saturation and compression."),
+      spacePanel(owner, "Space", "STEREO REVERB", "space", "Mix", "size", "Size", "spaceBypass", juce::Colour(0xff48f0c8), "Reverb mix. Size sets decay."),
+      risePanel(owner, "Rise", "PITCH + BUILDUP", "rise", "Rise", "riseMix", "Mix", "riseBypass", juce::Colour(0xff48f0c8), "Pitch shift, up to an octave."),
+      widthPanel(owner, "Width", "STEREO WIDENER", "width", "Width", "spread", "Spread", "widthBypass", juce::Colour(0xff48f0c8), "Stereo width and spacing."),
       outputAttachment(owner.parameters, "output", output), masterMixAttachment(owner.parameters, "masterMix", masterMix),
       bypassAttachment(owner.parameters, "bypass", bypass), softClipAttachment(owner.parameters, "softClip", softClip),
       suite(owner) {
@@ -299,9 +333,15 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     getConstrainer()->setFixedAspectRatio(static_cast<double>(designWidth) / designHeight);
     const int width = juce::jlimit(designWidth * 3 / 4, designWidth * 3 / 2, savedWidth > 0 ? savedWidth : designWidth);
     setSize(width, width * designHeight / designWidth);
+    content.addMouseListener(&lockListener, true);
+    lastLockMask = lockMask();
     startTimerHz(25);
 }
-SausageEditor::~SausageEditor() { stopTimer(); setLookAndFeel(nullptr); }
+SausageEditor::~SausageEditor() {
+    stopTimer();
+    content.removeMouseListener(&lockListener);
+    setLookAndFeel(nullptr);
+}
 float SausageEditor::animationPhase() const noexcept {
     const float phase = ownerProcessor.beatPhase.load(std::memory_order_relaxed);
     const double idle = std::fmod(juce::Time::getMillisecondCounterHiRes(), 500.0) / 500.0;
@@ -334,6 +374,57 @@ void SausageEditor::timerCallback() {
     inputMeter.push(ownerProcessor.inputPeak.exchange(0.0f), now);
     outputMeter.push(ownerProcessor.outputPeak.exchange(0.0f), now);
     content.repaint(738, 646, 126, 28);
+    if (const auto mask = lockMask(); mask != lastLockMask) {
+        lastLockMask = mask;
+        content.repaint();
+    }
+}
+void SausageEditor::paintContentOverChildren(juce::Graphics& g) {
+    paintLockedIndicators(g, content, ownerProcessor);
+}
+uint32_t SausageEditor::lockMask() const noexcept {
+    uint32_t mask = 0;
+    uint32_t bit = 1;
+    for (auto* parameter : ownerProcessor.getParameters()) {
+        if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(parameter)) {
+            if (ownerProcessor.isParamLocked(ranged->paramID)) mask |= bit;
+            bit <<= 1;
+        }
+    }
+    return mask;
+}
+void SausageEditor::ParamLockListener::mouseDown(const juce::MouseEvent& event) {
+    if (!event.mods.isPopupMenu()) return;
+    juce::Component* target = event.eventComponent;
+    juce::RangedAudioParameter* param = nullptr;
+    while (target != nullptr && target != &editor.content) {
+        if (target->getComponentID().isNotEmpty()) {
+            if (auto* found = editor.ownerProcessor.parameters.getParameter(target->getComponentID())) {
+                param = found;
+                break;
+            }
+        }
+        target = target->getParentComponent();
+    }
+    if (param == nullptr || target == nullptr) return;
+    const auto paramId = target->getComponentID();
+    const bool locked = editor.ownerProcessor.isParamLocked(paramId);
+    const auto name = param->getName(64).isNotEmpty() ? param->getName(64) : target->getTitle();
+    juce::PopupMenu menu;
+    menu.addItem(1, (locked ? "Unlock " : "Lock ") + name);
+    if (editor.ownerProcessor.hasAnyLockedParam()) {
+        menu.addSeparator();
+        menu.addItem(2, "Unlock all parameters");
+    }
+    juce::Component::SafePointer<SausageEditor> safeEditor(&editor);
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(target),
+                       [safeEditor, paramId, locked](int result) {
+        if (safeEditor == nullptr || result == 0) return;
+        if (result == 1) safeEditor->ownerProcessor.setParamLocked(paramId, !locked);
+        else if (result == 2) safeEditor->ownerProcessor.unlockAllParams();
+        safeEditor->lastLockMask = safeEditor->lockMask();
+        safeEditor->content.repaint();
+    });
 }
 void SausageEditor::paint(juce::Graphics& g) { g.fillAll(juce::Colour(0xff0d1317)); }
 void SausageEditor::paintContent(juce::Graphics& g) {

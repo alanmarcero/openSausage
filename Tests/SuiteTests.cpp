@@ -529,5 +529,71 @@ int runOpenSausageSuiteTests() {
     const auto fourFour = crossings(pitch, 3.9, 4, 4);
     require(start > 80 && end > start * 3 / 2 && steady > start * 3 / 2, "Host tempo position did not change the rise");
     require(fourFour > threeFour + 30, "Rise length ignored the host time signature");
+
+    {
+        SausageProcessor lockProc;
+        std::unique_ptr<juce::AudioProcessorEditor> lockEditor(lockProc.createEditor());
+        std::vector<juce::String> paramIds;
+        for (auto* parameter : lockProc.getParameters()) {
+            auto* ranged = dynamic_cast<juce::RangedAudioParameter*>(parameter);
+            require(ranged != nullptr, "Non-ranged parameter in getParameters()");
+            paramIds.push_back(ranged->paramID);
+            require(find(*lockEditor, ranged->paramID) != nullptr, "Parameter control missing from editor");
+        }
+        require(paramIds.size() == 22, "Unexpected parameter count");
+
+        for (const auto& id : paramIds) {
+            require(!lockProc.isParamLocked(id), "Parameter started locked");
+            lockProc.setParamLocked(id, true);
+            require(lockProc.isParamLocked(id), "Parameter failed to lock");
+            lockProc.setParamLocked(id, false);
+            require(!lockProc.isParamLocked(id), "Parameter failed to unlock");
+        }
+
+        for (const auto& id : paramIds) lockProc.setParamLocked(id, true);
+        require(lockProc.hasAnyLockedParam(), "hasAnyLockedParam() was false");
+        juce::MemoryBlock lockState;
+        lockProc.getStateInformation(lockState);
+
+        SausageProcessor restoredLocks;
+        restoredLocks.setStateInformation(lockState.getData(), static_cast<int>(lockState.getSize()));
+        for (const auto& id : paramIds)
+            require(restoredLocks.isParamLocked(id), "Parameter lock did not survive getStateInformation/setStateInformation");
+
+        restoredLocks.unlockAllParams();
+        require(!restoredLocks.hasAnyLockedParam(), "unlockAllParams() did not clear all locks");
+        juce::MemoryBlock unlockedState;
+        restoredLocks.getStateInformation(unlockedState);
+        SausageProcessor restoredUnlocked;
+        restoredUnlocked.setParamLocked("fatness", true);
+        restoredUnlocked.setStateInformation(unlockedState.getData(), static_cast<int>(unlockedState.getSize()));
+        require(!restoredUnlocked.hasAnyLockedParam(), "Unlocked state did not clear prior locks");
+
+        SausageProcessor cleanSource;
+        const auto cleanTree = cleanSource.copyParameterTree();
+
+        SausageProcessor presetProc;
+        setDenormalised(presetProc, "fatness", 77.0f);
+        setDenormalised(presetProc, "color", 44.0f);
+        setDenormalised(presetProc, "satFocus", 2.0f);
+        setDenormalised(presetProc, "softClip", 1.0f);
+        setDenormalised(presetProc, "riseLength", 4.0f);
+        presetProc.setParamLocked("fatness", true);
+        presetProc.setParamLocked("satFocus", true);
+        presetProc.setParamLocked("softClip", true);
+        presetProc.setParamLocked("riseLength", true);
+
+        presetProc.setCurrentProgram(0);
+        require(std::abs(raw(presetProc, "fatness") - 77.0f) < 0.05f, "setCurrentProgram overwrote locked fatness");
+        require(std::abs(raw(presetProc, "satFocus") - 2.0f) < 0.05f, "setCurrentProgram overwrote locked satFocus");
+        require(std::abs(raw(presetProc, "softClip") - 1.0f) < 0.05f, "setCurrentProgram overwrote locked softClip");
+        require(std::abs(raw(presetProc, "color") - 0.0f) < 0.05f, "setCurrentProgram did not update unlocked color");
+
+        setDenormalised(presetProc, "color", 55.0f);
+        presetProc.loadParameterTree(cleanTree, "Clean Slate");
+        require(std::abs(raw(presetProc, "fatness") - 77.0f) < 0.05f, "loadParameterTree overwrote locked fatness");
+        require(std::abs(raw(presetProc, "riseLength") - 4.0f) < 0.05f, "loadParameterTree overwrote locked riseLength");
+        require(std::abs(raw(presetProc, "color") - 0.0f) < 0.05f, "loadParameterTree did not update unlocked color");
+    }
     return 0;
 }

@@ -39,6 +39,10 @@ public:
     void applyRecipe(int index);
     void loadParameterTree(const juce::ValueTree&, const juce::String& presetName);
     juce::ValueTree copyParameterTree();
+    bool isParamLocked(const juce::String& paramId) const noexcept;
+    void setParamLocked(const juce::String& paramId, bool locked) noexcept;
+    void unlockAllParams() noexcept;
+    bool hasAnyLockedParam() const noexcept;
     static const std::vector<SausageRecipe>& factoryRecipes();
     juce::AudioProcessorValueTreeState parameters;
     ParameterUndo history;
@@ -58,7 +62,9 @@ private:
     MusicalClock readClock(int samples);
     void handleAsyncUpdate() override;
     static constexpr int parameterCount = 22;
+    static int paramIndex(const juce::String& paramId) noexcept;
     std::array<std::atomic<float>*, parameterCount> values {};
+    std::array<std::atomic<bool>, parameterCount> lockedParams {};
     sausage::RackSettings settings(bool hostBypassed = false) const noexcept;
     void process(juce::AudioBuffer<float>&, bool hostBypassed);
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SausageProcessor)

@@ -158,6 +158,11 @@ void SausageProcessor::getStateInformation(juce::MemoryBlock& destination) {
     auto state = parameters.copyState();
     state.setProperty("program", currentProgram, nullptr);
     state.setProperty("editorWidth", editorWidth.load(), nullptr);
+    juce::StringArray lockedIds;
+    for (int i = 0; i < parameterCount; ++i)
+        if (lockedParams[static_cast<std::size_t>(i)].load(std::memory_order_relaxed)) lockedIds.add(ids[i]);
+    if (!lockedIds.isEmpty()) state.setProperty("lockedParams", lockedIds.joinIntoString(","), nullptr);
+    else state.removeProperty("lockedParams", nullptr);
     compare.write(state);
     if (const auto xml = state.createXml()) copyXmlToBinary(*xml, destination);
 }
@@ -185,6 +190,13 @@ void SausageProcessor::setStateInformation(const void* data, int bytes) {
                     state.appendChild(parameter, nullptr);
                 }
             }
+            unlockAllParams();
+            const auto lockedList = state.getProperty("lockedParams").toString();
+            if (lockedList.isNotEmpty()) {
+                for (const auto& id : juce::StringArray::fromTokens(lockedList, ",", ""))
+                    setParamLocked(id.trim(), true);
+            }
+            state.removeProperty("lockedParams", nullptr);
             parameters.replaceState(state);
             currentProgram = program >= 0 && program < getNumPrograms() ? program : 0;
             editorWidth = static_cast<int>(state.getProperty("editorWidth", 0));
@@ -198,7 +210,9 @@ void SausageProcessor::loadParameterTree(const juce::ValueTree& tree, const juce
     const bool grouped = history.beginGroup("Preset");
     for (int index = 0; index < tree.getNumChildren(); ++index) {
         const auto child = tree.getChild(index);
-        auto* parameter = parameters.getParameter(child.getProperty("id").toString());
+        const auto paramId = child.getProperty("id").toString();
+        if (isParamLocked(paramId)) continue;
+        auto* parameter = parameters.getParameter(paramId);
         if (parameter == nullptr) continue;
         const float denormalised = child.getProperty("value");
         parameter->beginChangeGesture();
@@ -210,6 +224,25 @@ void SausageProcessor::loadParameterTree(const juce::ValueTree& tree, const juce
     compare.relabel({presetName, false});
 }
 juce::ValueTree SausageProcessor::copyParameterTree() { return parameters.copyState(); }
+int SausageProcessor::paramIndex(const juce::String& paramId) noexcept {
+    for (int i = 0; i < parameterCount; ++i)
+        if (paramId == ids[i]) return i;
+    return -1;
+}
+bool SausageProcessor::isParamLocked(const juce::String& paramId) const noexcept {
+    const int index = paramIndex(paramId);
+    return index >= 0 && lockedParams[static_cast<std::size_t>(index)].load(std::memory_order_relaxed);
+}
+void SausageProcessor::setParamLocked(const juce::String& paramId, bool locked) noexcept {
+    const int index = paramIndex(paramId);
+    if (index >= 0) lockedParams[static_cast<std::size_t>(index)].store(locked, std::memory_order_relaxed);
+}
+void SausageProcessor::unlockAllParams() noexcept {
+    for (auto& flag : lockedParams) flag.store(false, std::memory_order_relaxed);
+}
+bool SausageProcessor::hasAnyLockedParam() const noexcept {
+    return std::ranges::any_of(lockedParams, [](const auto& flag) { return flag.load(std::memory_order_relaxed); });
+}
 const std::vector<SausageRecipe>& SausageProcessor::factoryRecipes() {
     static const std::vector<SausageRecipe> recipes{
         // Uplifting (12) — indices 0, 3, 4 preserve EditorCapture test invariants
@@ -290,6 +323,7 @@ void SausageProcessor::applyRecipe(int index) {
         {18, r.preDelay}, {19, r.masterMix}, {20, r.softClip}
     }};
     std::ranges::for_each(targetValues, [this](const auto& entry) {
+        if (isParamLocked(ids[entry.first])) return;
         auto* parameter = parameters.getParameter(ids[entry.first]);
         if (parameter == nullptr) return;
         parameter->beginChangeGesture();
