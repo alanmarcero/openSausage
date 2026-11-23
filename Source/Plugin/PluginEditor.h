@@ -62,6 +62,7 @@ class LevelMeter final : public juce::Component, public juce::SettableTooltipCli
 public:
     explicit LevelMeter(juce::String label);
     void push(float peak, double nowMs);
+    void setBypassed(bool shouldBeBypassed);
     void paint(juce::Graphics&) override;
     void mouseDown(const juce::MouseEvent&) override;
     float heldPeak() const noexcept { return held; }
@@ -71,6 +72,7 @@ private:
     float level = 0.0f, held = 0.0f;
     double heldAt = 0.0;
     bool clipped = false;
+    bool bypassed = false;
 };
 
 class SausageEditor final : public juce::AudioProcessorEditor, private juce::Timer {
@@ -99,6 +101,7 @@ private:
     void paintContentOverChildren(juce::Graphics&);
     uint32_t lockMask() const noexcept;
     bool isCompressionDimmed() const noexcept;
+    bool isRackBypassed() const noexcept;
     SausageProcessor& ownerProcessor;
     Content content {*this};
     ParamLockListener lockListener {*this};
@@ -112,7 +115,7 @@ private:
     ModulePanel sausagePanel, spacePanel, risePanel, widthPanel;
     LockableControl<juce::Slider> output, masterMix;
     LevelMeter inputMeter {"INPUT"}, outputMeter {"OUTPUT"};
-    LockableControl<juce::TextButton> bypass, softClip{"Soft Clip"};
+    LockableControl<juce::TextButton> bypass, softClip{"Soft clip"};
     LockableControl<juce::ComboBox> algorithms;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> algorithmAttachment;
     juce::AudioProcessorValueTreeState::SliderAttachment outputAttachment, masterMixAttachment;

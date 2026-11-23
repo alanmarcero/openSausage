@@ -78,7 +78,32 @@ void SausageLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int w
 void SausageLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width, int height, float position, float minimum, float maximum,
                                           juce::Slider::SliderStyle style, juce::Slider& slider) {
     const DimWhenDisabled dim(g, slider);
-    LookAndFeel_V4::drawLinearSlider(g, x, y, width, height, position, minimum, maximum, style, slider);
+    if (style != juce::Slider::LinearHorizontal) {
+        LookAndFeel_V4::drawLinearSlider(g, x, y, width, height, position, minimum, maximum, style, slider);
+        drawFocusRing(g, slider);
+        return;
+    }
+    const auto trackHeight = 6.0f;
+    const auto trackY = static_cast<float>(y) + (static_cast<float>(height) - trackHeight) * 0.5f;
+    const juce::Rectangle<float> track(static_cast<float>(x) + 4.0f, trackY, static_cast<float>(width) - 8.0f, trackHeight);
+    g.setColour(juce::Colour(0xff0e161a));
+    g.fillRoundedRectangle(track, 3.0f);
+    g.setColour(juce::Colour(0xff354852));
+    g.drawRoundedRectangle(track, 3.0f, 1.0f);
+    const auto clampedPos = juce::jlimit(track.getX(), track.getRight(), position);
+    const auto accent = slider.findColour(juce::Slider::trackColourId);
+    if (clampedPos > track.getX()) {
+        g.setColour(accent.withAlpha(0.85f));
+        g.fillRoundedRectangle(track.withRight(clampedPos), 3.0f);
+    }
+    constexpr float thumbRadius = 6.5f;
+    const auto thumbY = track.getCentreY();
+    g.setColour(juce::Colours::black.withAlpha(0.28f));
+    g.fillEllipse(clampedPos - thumbRadius, thumbY - thumbRadius + 1.5f, thumbRadius * 2.0f, thumbRadius * 2.0f);
+    g.setColour(accent);
+    g.fillEllipse(clampedPos - thumbRadius, thumbY - thumbRadius, thumbRadius * 2.0f, thumbRadius * 2.0f);
+    g.setColour(juce::Colour(0xff152026));
+    g.fillEllipse(clampedPos - 2.2f, thumbY - 2.2f, 4.4f, 4.4f);
     drawFocusRing(g, slider);
 }
 void SausageLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, bool down, int buttonX, int buttonY, int buttonWidth, int buttonHeight,
@@ -144,7 +169,7 @@ void SausageLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& but
     if (button.getComponentID() == "softClip") {
         g.setColour(button.getToggleState() ? juce::Colour(0xff48f0c8) : juce::Colour(0xff869ca8));
         g.setFont(juce::FontOptions(14.0f, juce::Font::bold));
-        g.drawText("Soft Clip", button.getLocalBounds().withTrimmedLeft(20), juce::Justification::centred);
+        g.drawText("Soft clip", button.getLocalBounds().withTrimmedLeft(20), juce::Justification::centred);
         return;
     }
     g.setColour(button.getToggleState() ? juce::Colour(0xff869ca8) : juce::Colour(0xffe6f0f5));

@@ -49,6 +49,14 @@ void dial(juce::Slider& slider, const juce::String& id, juce::Colour accent) {
     slider.setDoubleClickReturnValue(true, id == "size" || id == "spread" ? 50.0 : 0.0);
     slider.setWantsKeyboardFocus(true);
 }
+void configureHorizontalSlider(juce::Slider& slider, const juce::String& id, juce::Colour accent, int textBoxWidth, int decimals) {
+    dial(slider, id, accent);
+    slider.setSliderStyle(juce::Slider::LinearHorizontal);
+    slider.setTextBoxStyle(juce::Slider::TextBoxRight, false, textBoxWidth, 24);
+    slider.setNumDecimalPlacesToDisplay(decimals);
+    slider.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xff0f181d));
+    slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colour(0xff2f424c));
+}
 void drawPadlock(juce::Graphics& g, juce::Rectangle<float> box) {
     constexpr float w = 10.0f, h = 12.0f;
     const float x = box.getX() + (box.getWidth() - w) * 0.5f;
@@ -98,12 +106,20 @@ void LevelMeter::push(float peak, double nowMs) {
     clipped = clipped || peak > 1.0f;
     if (std::tuple(level, held, clipped) != before) repaint();
 }
+void LevelMeter::setBypassed(bool shouldBeBypassed) {
+    if (bypassed == shouldBeBypassed) return;
+    bypassed = shouldBeBypassed;
+    repaint();
+}
 void LevelMeter::paint(juce::Graphics& g) {
     const auto heldDb = juce::Decibels::gainToDecibels(held, -60.0f);
-    text(g, label, {0, 0, 90, 18}, 12.0f, cream, juce::Font::bold);
+    const auto headerColour = bypassed ? juce::Colour(0xff94a5ac) : cream;
+    text(g, label, {0, 0, 72, 18}, 13.0f, headerColour, juce::Font::bold);
     auto readout = juce::String("-inf");
     if (heldDb > -60.0f) readout = (heldDb > 0.0f ? "+" : "") + juce::String(heldDb, 1);
-    text(g, readout + " dBFS", {60, 0, 100, 18}, 12.0f, cream, juce::Font::plain, juce::Justification::centredRight);
+    const auto readoutColour = bypassed ? juce::Colour(0xff94a5ac)
+                                        : (heldDb > -60.0f ? cream : juce::Colour(0xffbccbd2));
+    text(g, readout + " dBFS", {64, 0, 98, 18}, 13.5f, readoutColour, juce::Font::plain, juce::Justification::centredRight);
     // 22 segments span -60 to 0 dBFS. The segment of the held peak stays lit.
     const auto topSegment = [](float gain) {
         return std::min(21, static_cast<int>(std::ceil((juce::Decibels::gainToDecibels(gain, -60.0f) + 60.0f) * 22.0f / 60.0f)) - 1);
@@ -111,12 +127,30 @@ void LevelMeter::paint(juce::Graphics& g) {
     const int levelTop = topSegment(level), heldTop = topSegment(held);
     std::ranges::for_each(std::views::iota(0, 22), [&](int segment) {
         const bool lit = segment <= levelTop || segment == heldTop;
-        const auto litColour = segment >= 20 ? 0xffffbe3b : 0xff48f0c8;
+        const juce::uint32 litColour = bypassed
+            ? (segment >= 20 ? 0xff9b8b62 : 0xff657579)
+            : (segment >= 20 ? 0xffffbe3b : 0xff48f0c8);
         g.setColour(juce::Colour(lit ? litColour : 0xff313f42));
-        g.fillRoundedRectangle(static_cast<float>(segment * 7), 26.0f, 5.0f, 16.0f, 1.0f);
+        g.fillRoundedRectangle(static_cast<float>(segment * 7), 22.0f, 5.0f, 16.0f, 1.0f);
     });
-    g.setColour(juce::Colour(clipped ? 0xffff4d4d : 0xff313f42));
-    g.fillRoundedRectangle(154.0f, 26.0f, 5.0f, 16.0f, 1.0f);
+    const juce::uint32 clipColour = bypassed ? (clipped ? 0xffa85252 : 0xff313f42)
+                                             : (clipped ? 0xffff4d4d : 0xff313f42);
+    g.setColour(juce::Colour(clipColour));
+    g.fillRoundedRectangle(154.0f, 22.0f, 5.0f, 16.0f, 1.0f);
+    if (bypassed) {
+        const juce::Rectangle<float> badge(48.0f, 23.0f, 64.0f, 14.0f);
+        g.setColour(juce::Colour(0xe610181c));
+        g.fillRoundedRectangle(badge, 3.0f);
+        g.setColour(juce::Colour(0xff546164));
+        g.drawRoundedRectangle(badge, 3.0f, 1.0f);
+        text(g, "BYPASSED", badge.toNearestInt(), 9.5f, juce::Colour(0xffd8b15a), juce::Font::bold, juce::Justification::centred);
+    }
+    constexpr std::array<std::pair<int, const char*>, 3> ticks {{{92, "-24"}, {123, "-12"}, {151, "0"}}};
+    for (const auto& [tickX, tickLabel] : ticks) {
+        g.setColour(juce::Colour(0xff55676e));
+        g.drawVerticalLine(tickX, 40.0f, 43.0f);
+        text(g, tickLabel, {tickX - 13, 43, 26, 13}, 10.5f, juce::Colour(0xff96aab3), juce::Font::plain, juce::Justification::centred);
+    }
 }
 void LevelMeter::mouseDown(const juce::MouseEvent&) {
     clipped = false;
@@ -144,13 +178,8 @@ ModulePanel::ModulePanel(SausageProcessor& proc, const juce::String& name, const
     bypass.setTooltip("Fully bypass " + name + ", including its wet signal and tails. Other modules keep running.");
     addAndMakeVisible(primary); addAndMakeVisible(secondary); addAndMakeVisible(bypass);
     if (kind == 0) {
-        dial(saturationMix, "satMix", color);
-        dial(dynamics, "satDynamics", color);
-        for (auto* slider : {&saturationMix, &dynamics}) {
-            slider->setSliderStyle(juce::Slider::LinearHorizontal);
-            slider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 52, 24);
-            slider->setNumDecimalPlacesToDisplay(0);
-        }
+        configureHorizontalSlider(saturationMix, "satMix", color, 46, 0);
+        configureHorizontalSlider(dynamics, "satDynamics", color, 46, 0);
         saturationMix.setDoubleClickReturnValue(true, 100.0);
         dynamics.setDoubleClickReturnValue(true, 100.0);
         saturationMix.setTitle("Saturation Mix");
@@ -166,10 +195,7 @@ ModulePanel::ModulePanel(SausageProcessor& proc, const juce::String& name, const
         focusAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(state, "satFocus", focus);
         addAndMakeVisible(saturationMix); addAndMakeVisible(dynamics); addAndMakeVisible(focus);
     } else if (kind == 1) {
-        dial(preDelay, "preDelay", color);
-        preDelay.setSliderStyle(juce::Slider::LinearHorizontal);
-        preDelay.setTextBoxStyle(juce::Slider::TextBoxRight, false, 52, 24);
-        preDelay.setNumDecimalPlacesToDisplay(0);
+        configureHorizontalSlider(preDelay, "preDelay", color, 48, 0);
         preDelay.setDoubleClickReturnValue(true, 0.0);
         preDelay.setTitle("Pre-Delay");
         preDelay.setTooltip("Space pre-delay (0 to 100 ms) so transients punch through before the reverb tail.");
@@ -225,39 +251,46 @@ void ModulePanel::paint(juce::Graphics& g) {
     }
     if (kind == 1) caption("PRE-DELAY", preDelay);
     if (kind == 2) caption("LENGTH", riseLength);
-    g.setFont(juce::FontOptions(12.0f)); g.setColour(juce::Colour(0xffa3afaf));
-    if (kind == 0) g.drawFittedText(hint, {130, 288, 122, 44}, juce::Justification::topLeft, 3);
-    if (kind == 3) g.drawFittedText(hint, {132, 350, 112, 30}, juce::Justification::topLeft, 2);
+    g.setFont(juce::FontOptions(13.0f)); g.setColour(juce::Colour(0xffc2d0d4));
+    if (kind == 0) g.drawFittedText(hint, {128, 290, 126, 52}, juce::Justification::topLeft, 3, 0.95f);
+    if (kind == 3) g.drawFittedText(hint, {128, 332, 126, 44}, juce::Justification::topLeft, 3, 0.95f);
     const auto value = isModuleActive ? (kind == 0 ? std::max(amount->load(), detail->load()) / 100.0f * (satMix->load() / 100.0f) : amount->load() / 100.0f) : 0.0f;
     const auto secondaryValue = detail->load() / 100.0f;
     const auto motion = phase * value;
-    g.setColour(isModuleActive ? accent.darker(0.2f) : juce::Colour(0xff546164));
+    const juce::Rectangle<float> iconTray(126.0f, 383.0f, 128.0f, 28.0f);
+    g.setColour(juce::Colour(0x550b1114));
+    g.fillRoundedRectangle(iconTray, 5.0f);
+    g.setColour(juce::Colour(0x22e6f0f5));
+    g.drawRoundedRectangle(iconTray, 5.0f, 1.0f);
+    g.setColour(isModuleActive ? accent.darker(0.15f) : juce::Colour(0xff546164));
+    const float iconMidY = iconTray.getCentreY();
     if (kind == 0) {
         juce::Path waveform;
         for (int x = 0; x <= 104; ++x) {
             const auto wave = std::tanh(std::sin(static_cast<float>(x) * 0.14f + motion) * (1.0f + value * 8.0f));
-            const auto y = 396.0f - wave * (3.0f + value * 6.0f);
-            if (x == 0) waveform.startNewSubPath(132.0f, y); else waveform.lineTo(132.0f + static_cast<float>(x), y);
+            const auto y = iconMidY - wave * (3.0f + value * 6.0f);
+            if (x == 0) waveform.startNewSubPath(138.0f, y); else waveform.lineTo(138.0f + static_cast<float>(x), y);
         }
         g.strokePath(waveform, juce::PathStrokeType(1.7f));
     } else if (kind == 1) {
         for (int ring = 0; ring < 4; ++ring) {
-            const auto radius = 3.0f + std::fmod(static_cast<float>(ring) * 8.0f + motion * 5.0f, 32.0f) * (0.4f + value * 0.6f);
-            g.drawEllipse(184.0f - radius, 396.0f - radius * 0.32f, radius * 2.0f, radius * 0.64f, 1.3f);
+            const auto radius = 4.0f + std::fmod(static_cast<float>(ring) * 10.0f + motion * 6.0f, 40.0f) * (0.45f + value * 0.55f);
+            g.drawEllipse(iconTray.getCentreX() - radius, iconMidY - radius * 0.28f, radius * 2.0f, radius * 0.56f, 1.5f);
         }
     } else if (kind == 2) {
         for (int arrow = 0; arrow < 4; ++arrow) {
-            const auto x = 142.0f + static_cast<float>(arrow) * 26.0f;
-            const auto y = 402.0f - std::fmod(static_cast<float>(arrow) * 4.0f + motion * 8.0f, 18.0f);
-            juce::Path chevron; chevron.startNewSubPath(x - 5, y + 4); chevron.lineTo(x, y - 2); chevron.lineTo(x + 5, y + 4);
-            g.strokePath(chevron, juce::PathStrokeType(1.8f));
+            const auto x = 144.0f + static_cast<float>(arrow) * 30.0f;
+            const auto y = (iconMidY + 5.0f) - std::fmod(static_cast<float>(arrow) * 3.5f + motion * 7.0f, 14.0f);
+            juce::Path chevron; chevron.startNewSubPath(x - 6.5f, y + 4.5f); chevron.lineTo(x, y - 2.5f); chevron.lineTo(x + 6.5f, y + 4.5f);
+            g.strokePath(chevron, juce::PathStrokeType(1.9f));
         }
     } else {
         const auto distance = 4.0f + value * 28.0f;
-        const auto wave = std::sin(motion) * value * 3.0f;
-        g.drawEllipse(178.0f - distance, 387.0f + wave, 16.0f + secondaryValue * 8.0f, 18.0f, 1.6f);
-        g.drawEllipse(178.0f + distance, 387.0f - wave, 16.0f + secondaryValue * 8.0f, 18.0f, 1.6f);
-        g.drawLine(142.0f, 396.0f, 232.0f, 396.0f, 0.7f);
+        const auto wave = std::sin(motion) * value * 2.5f;
+        const auto ellipseWidth = 18.0f + secondaryValue * 10.0f;
+        g.drawEllipse(iconTray.getCentreX() - distance - ellipseWidth * 0.5f, iconMidY - 10.0f + wave, ellipseWidth, 20.0f, 1.6f);
+        g.drawEllipse(iconTray.getCentreX() + distance - ellipseWidth * 0.5f, iconMidY - 10.0f - wave, ellipseWidth, 20.0f, 1.6f);
+        g.drawLine(136.0f, iconMidY, 244.0f, iconMidY, 0.9f);
     }
 }
 void ModulePanel::paintOverChildren(juce::Graphics& g) {
@@ -275,7 +308,7 @@ void ModulePanel::setBeatPhase(float position) {
     const std::array<float, 2> header {algorithm->load(), active ? 1.0f : 0.0f};
     const std::array<float, 3> display {value, detail->load(), position * value};
     if (header != shownHeader) repaint(20, 57, 232, 22);
-    if (display != shownDisplay) repaint(130, 378, 122, 34);
+    if (display != shownDisplay) repaint(126, 382, 128, 30);
     shownHeader = header;
     shownDisplay = display;
     phase = position;
@@ -300,16 +333,16 @@ void ModulePanel::dimInactive() {
 void ModulePanel::resized() {
     bypass.setBounds(154, 20, 94, 36);
     if (kind == 0) {
-        primary.setBounds(4, 118, 126, 166);
-        secondary.setBounds(10, 314, 108, 96);
-        saturationMix.setBounds(130, 122, 122, 36);
-        dynamics.setBounds(130, 182, 122, 36);
-        focus.setBounds(130, 244, 122, 36);
+        primary.setBounds(4, 112, 124, 160);
+        secondary.setBounds(8, 302, 114, 108);
+        saturationMix.setBounds(128, 122, 128, 36);
+        dynamics.setBounds(128, 182, 128, 36);
+        focus.setBounds(128, 244, 128, 36);
     } else {
-        primary.setBounds(44, 126, 178, 178);
-        secondary.setBounds(20, 314, 100, 96);
-        if (kind == 1) preDelay.setBounds(130, 344, 122, 36);
-        if (kind == 2) riseLength.setBounds(130, 344, 122, 36);
+        primary.setBounds(44, 112, 178, 166);
+        secondary.setBounds(10, 302, 114, 108);
+        if (kind == 1) preDelay.setBounds(128, 344, 128, 36);
+        if (kind == 2) riseLength.setBounds(128, 344, 128, 36);
     }
 }
 SausageEditor::SausageEditor(SausageProcessor& owner)
@@ -340,7 +373,7 @@ SausageEditor::SausageEditor(SausageProcessor& owner)
     masterMix.setDoubleClickReturnValue(true, 100.0);
     masterMix.setTooltip("Rack mix: blend of the dry input and the processed rack. 0% is dry, 100% is fully processed.");
     masterMix.setColour(juce::Slider::textBoxTextColourId, cream);
-    softClip.setComponentID("softClip"); softClip.setName("Soft Clip"); softClip.setTitle("Soft Clip"); softClip.setClickingTogglesState(true);
+    softClip.setComponentID("softClip"); softClip.setName("Soft clip"); softClip.setTitle("Soft clip"); softClip.setClickingTogglesState(true);
     softClip.setTooltip("Anti-aliased post-rack soft clipper ceiling so aggressive builds never exceed 0 dBFS.");
     bypass.setComponentID("bypass"); bypass.setName("Master bypass"); bypass.setTitle("Master bypass"); bypass.setClickingTogglesState(true);
     bypass.setTooltip("Bypass the complete chain. Latency stays at " + juce::String(owner.getLatencySamples()) + " samples.");
@@ -391,9 +424,19 @@ bool SausageEditor::isCompressionDimmed() const noexcept {
         || ownerProcessor.parameters.getRawParameterValue("satDynamics")->load() <= 0.0f
         || ownerProcessor.parameters.getRawParameterValue("masterMix")->load() <= 0.0f;
 }
+bool SausageEditor::isRackBypassed() const noexcept {
+    if (ownerProcessor.parameters.getRawParameterValue("bypass")->load() > 0.5f) return true;
+    return ownerProcessor.parameters.getRawParameterValue("sausageBypass")->load() > 0.5f
+        && ownerProcessor.parameters.getRawParameterValue("spaceBypass")->load() > 0.5f
+        && ownerProcessor.parameters.getRawParameterValue("riseBypass")->load() > 0.5f
+        && ownerProcessor.parameters.getRawParameterValue("widthBypass")->load() > 0.5f;
+}
 void SausageEditor::updateDimming() {
     for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel})
         p->dimInactive();
+    const bool rackBypassed = isRackBypassed();
+    inputMeter.setBypassed(rackBypassed);
+    outputMeter.setBypassed(rackBypassed);
     const auto off = ownerProcessor.parameters.getRawParameterValue("bypass")->load() > 0.5f ? masterBypassHint : juce::String();
     const bool dry = ownerProcessor.parameters.getRawParameterValue("masterMix")->load() <= 0.0f;
     showEffect(output, off, dry, "Raise Rack mix to hear this.");
@@ -493,7 +536,7 @@ void SausageEditor::paintContent(juce::Graphics& g) {
     }
     text(g, "openSausage", {186, 30, 480, 56}, 46.0f, ink, juce::Font::bold);
     text(g, "Saturation / Space / Pitch / Stereo", {190, 94, 330, 25}, 14.0f, ink, juce::Font::bold);
-    text(g, "v" JucePlugin_VersionString, {190, 122, 150, 18}, 12.0f, juce::Colour(0xff869ca8));
+    text(g, "v" JucePlugin_VersionString, {190, 121, 150, 20}, 13.0f, juce::Colour(0xffa8bcc6));
     text(g, "Algorithm", {532, 81, 145, 20}, 14.0f, ink, juce::Font::bold);
     text(g, "Preset", {706, 81, 412, 20}, 14.0f, ink, juce::Font::bold);
     text(g, "ALAN MARCERO", {930, 31, 196, 24}, 15.0f, ink, juce::Font::bold, juce::Justification::centredRight);
@@ -517,7 +560,7 @@ void SausageEditor::resized() {
     risePanel.setBounds(588, 172, 266, 415); widthPanel.setBounds(870, 172, 266, 415);
     output.setBounds(400, 618, 100, 96); masterMix.setBounds(520, 618, 100, 96);
     softClip.setBounds(864, 633, 112, 36); bypass.setBounds(986, 633, 146, 36);
-    inputMeter.setBounds(30, 628, 160, 44); outputMeter.setBounds(214, 628, 160, 44);
+    inputMeter.setBounds(30, 622, 162, 58); outputMeter.setBounds(214, 622, 162, 58);
     algorithms.setBounds(532, 104, 158, 36);
     suite.setBounds(0, 716, 1160, 44);
     suite.presetRow.setBounds(706, 102, 426, 66);

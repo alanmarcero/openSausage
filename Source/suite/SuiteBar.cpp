@@ -3,12 +3,12 @@
 namespace {
 constexpr juce::uint32 confirmWindowMs = 3000;
 void styleSearch(juce::TextEditor& editor) {
-    editor.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff152026));
+    editor.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff162228));
     editor.setColour(juce::TextEditor::textColourId, juce::Colour(0xffe6f0f5));
-    editor.setColour(juce::TextEditor::outlineColourId, juce::Colour(0xff283842));
+    editor.setColour(juce::TextEditor::outlineColourId, juce::Colour(0xff3b505b));
     editor.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour(0xff48f0c8));
     editor.setJustification(juce::Justification::centredLeft);
-    editor.setIndents(6, 2);
+    editor.setIndents(10, 4);
     editor.setFont(juce::FontOptions(14.0f));
 }
 }
@@ -61,7 +61,7 @@ SuiteBar::SuiteBar(SausageProcessor& owner) : processor(owner) {
     search.setComponentID("presetSearch");
     search.setName("Preset search");
     search.setTooltip("Filter factory and saved presets. Return loads the first match.");
-    search.setTextToShowWhenEmpty("Search presets", juce::Colour(0xff869ca8));
+    search.setTextToShowWhenEmpty("Search presets", juce::Colour(0xffa8bcc6));
     search.setMultiLine(false);
     search.setReturnKeyStartsNewLine(false);
     styleSearch(search);
@@ -76,7 +76,7 @@ SuiteBar::SuiteBar(SausageProcessor& owner) : processor(owner) {
     name.setComponentID("presetName");
     name.setName("Preset name");
     name.setTooltip("Name for Save and Rename. Return saves.");
-    name.setTextToShowWhenEmpty("Preset name", juce::Colour(0xff869ca8));
+    name.setTextToShowWhenEmpty("Preset name", juce::Colour(0xffa8bcc6));
     name.setMultiLine(false);
     name.setReturnKeyStartsNewLine(false);
     styleSearch(name);
@@ -111,22 +111,22 @@ void SuiteBar::resized() {
         row.removeFromLeft(4);
         return area;
     };
-    undo.setBounds(take(64));
-    redo.setBounds(take(64));
-    row.removeFromLeft(8);
+    undo.setBounds(take(58));
+    redo.setBounds(take(58));
+    row.removeFromLeft(10);
     slotA.setBounds(take(40));
     slotB.setBounds(take(40));
-    copyAToB.setBounds(take(108));
-    copyBToA.setBounds(take(108));
-    row.removeFromLeft(8);
-    search.setBounds(take(180));
-    row.removeFromLeft(8);
-    deleteButton.setBounds(row.removeFromRight(76));
+    copyAToB.setBounds(take(102));
+    copyBToA.setBounds(take(102));
+    row.removeFromLeft(10);
+    search.setBounds(take(192));
+    row.removeFromLeft(10);
+    deleteButton.setBounds(row.removeFromRight(74));
     row.removeFromRight(4);
-    renameButton.setBounds(row.removeFromRight(84));
+    renameButton.setBounds(row.removeFromRight(80));
     row.removeFromRight(4);
-    save.setBounds(row.removeFromRight(84));
-    row.removeFromRight(4);
+    save.setBounds(row.removeFromRight(76));
+    row.removeFromRight(6);
     name.setBounds(row);
 }
 const PresetLibrary::Entry* SuiteBar::selected() const {
