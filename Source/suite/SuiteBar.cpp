@@ -34,8 +34,8 @@ SuiteBar::SuiteBar(SausageProcessor& owner) : processor(owner) {
     add(*this, save, "suiteSave", "Save the current sound under the preset name. Asks before replacing a saved preset.");
     add(*this, renameButton, "suiteRename", "Rename the current saved preset to the preset name. Factory recipes stay read-only.");
     add(*this, deleteButton, "suiteDelete", "Delete the current saved preset. Asks first. Factory recipes stay read-only.");
-    undo.onClick = [this] { processor.history.undo(); refresh(); };
-    redo.onClick = [this] { processor.history.redo(); refresh(); };
+    undo.onClick = [this] { disarm(); processor.history.undo(); refresh(); };
+    redo.onClick = [this] { disarm(); processor.history.redo(); refresh(); };
     slotA.onClick = [this] {
         if (processor.compare.isB()) {
             processor.compare.toggle();
@@ -50,8 +50,8 @@ SuiteBar::SuiteBar(SausageProcessor& owner) : processor(owner) {
         }
         refresh();
     };
-    copyAToB.onClick = [this] { processor.compare.copyAToB(); refresh(); };
-    copyBToA.onClick = [this] { processor.compare.copyBToA(); refresh(); };
+    copyAToB.onClick = [this] { disarm(); processor.compare.copyAToB(); refresh(); };
+    copyBToA.onClick = [this] { disarm(); processor.compare.copyBToA(); refresh(); };
     presetRow.previous.onClick = [this] { step(-1); };
     presetRow.next.onClick = [this] { step(1); };
     presetRow.favorite.onClick = [this] { toggleFavorite(); };
@@ -211,9 +211,10 @@ void SuiteBar::savePreset() {
         for (int number = 2; processor.presets.loadUser(presetName) || processor.presets.isFactoryName(presetName); ++number)
             presetName = "Preset " + juce::String(number);
     }
-    if (processor.presets.loadUser(presetName) && armed != &save) {
+    if (processor.presets.loadUser(presetName) && (armed != &save || armedTarget != presetName)) {
         disarm();
         armed = &save;
+        armedTarget = presetName;
         armedAt = juce::Time::getMillisecondCounter();
         save.setButtonText("Replace?");
         report(presetName + " exists. Click Replace? to overwrite it.");
@@ -253,16 +254,16 @@ void SuiteBar::deletePresetFile() {
         return;
     }
     const auto presetName = entry->name;
-    if (armed != &deleteButton || armedDeleteTarget != presetName) {
+    if (armed != &deleteButton || armedTarget != presetName) {
         disarm();
         armed = &deleteButton;
-        armedDeleteTarget = presetName;
+        armedTarget = presetName;
         armedAt = juce::Time::getMillisecondCounter();
         deleteButton.setButtonText("Delete?");
         report("Click Delete? again to remove " + presetName + ".");
         return;
     }
-    const auto target = armedDeleteTarget;
+    const auto target = armedTarget;
     disarm();
     juce::String error;
     if (!processor.presets.remove(target, error)) {
@@ -281,8 +282,9 @@ void SuiteBar::toggleFavorite() {
     rebuild();
 }
 void SuiteBar::disarm() {
+    if (armed != nullptr) report({});
     armed = nullptr;
-    armedDeleteTarget.clear();
+    armedTarget.clear();
     save.setButtonText("Save");
     deleteButton.setButtonText("Delete");
 }

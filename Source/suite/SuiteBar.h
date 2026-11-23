@@ -34,7 +34,7 @@ private:
     std::vector<PresetLibrary::Entry> shown;
     juce::String shownLabel;
     juce::Button* armed = nullptr;
-    juce::String armedDeleteTarget;
+    juce::String armedTarget;
     juce::uint32 armedAt = 0;
     bool rebuilding = false;
 };

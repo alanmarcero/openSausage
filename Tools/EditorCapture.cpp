@@ -11,6 +11,8 @@ juce::Component* find(juce::Component& root, const juce::String& id) {
     return nullptr;
 }
 void save(juce::Component& editor, const juce::File& directory, const juce::String& name) {
+    if (auto* sausageEditor = dynamic_cast<SausageEditor*>(&editor))
+        sausageEditor->updateDimming();
     auto stream = directory.getChildFile(name).createOutputStream();
     require(stream != nullptr, "Cannot create screenshot output");
     stream->setPosition(0); stream->truncate();
@@ -74,8 +76,6 @@ int main(int argc, char** argv) {
                     && find(*editor, "suiteB") && find(*editor, "presetSearch") && find(*editor, "presetBrowser"),
                 "Undo, A/B, or preset browser missing");
         require(editor->getWidth() == 1160 && editor->getHeight() == 760, "Editor left its default size");
-        for (const auto* id : {"fatness", "space", "rise", "width"})
-            dynamic_cast<ModulePanel*>(find(*editor, id)->getParentComponent())->dimInactive();
         save(*editor, output, "openSausage-clean.png");
         saturationMix->setValue(42.0, juce::sendNotificationSync);
         dynamics->setValue(37.0, juce::sendNotificationSync);

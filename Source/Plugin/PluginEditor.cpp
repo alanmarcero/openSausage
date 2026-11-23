@@ -22,8 +22,17 @@ void showEffect(juce::Component& control, const juce::String& off, bool hasNoEff
     if (!properties.contains("tooltip")) properties.set("tooltip", tips.getTooltip());
     auto tooltip = properties["tooltip"].toString();
     if (reason.isNotEmpty()) tooltip << " " << reason;
-    control.setAlpha(reason.isEmpty() ? 1.0f : 0.4f);
+    const float nextAlpha = reason.isEmpty() ? 1.0f : 0.4f;
+    if (control.getAlpha() != nextAlpha) {
+        control.setAlpha(nextAlpha);
+        if (auto* parent = control.getParentComponent())
+            parent->repaint(control.getBounds().withY(control.getY() - 20).withHeight(18));
+    }
     if (tips.getTooltip() != tooltip) tips.setTooltip(tooltip);
+    for (auto* child : control.getChildren())
+        if (auto* childTips = dynamic_cast<juce::SettableTooltipClient*>(child))
+            if (childTips->getTooltip() != tooltip)
+                childTips->setTooltip(tooltip);
 }
 void dial(juce::Slider& slider, const juce::String& id, juce::Colour accent) {
     slider.setComponentID(id);
@@ -32,6 +41,8 @@ void dial(juce::Slider& slider, const juce::String& id, juce::Colour accent) {
     slider.setRotaryParameters(juce::MathConstants<float>::pi * 1.25f, juce::MathConstants<float>::pi * 2.75f, true);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 76, 24);
     slider.setColour(juce::Slider::rotarySliderFillColourId, accent);
+    slider.setColour(juce::Slider::thumbColourId, accent);
+    slider.setColour(juce::Slider::trackColourId, accent);
     slider.setNumDecimalPlacesToDisplay(1);
     slider.setColour(juce::Slider::textBoxTextColourId, ink);
     slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
@@ -62,9 +73,16 @@ void paintLockedIndicators(juce::Graphics& g, const juce::Component& container, 
         const auto bounds = child->getBounds().toFloat();
         const auto* slider = dynamic_cast<const juce::Slider*>(child);
         const bool isLinear = slider != nullptr && slider->getSliderStyle() == juce::Slider::LinearHorizontal;
-        const juce::Rectangle<float> badge = isLinear
-            ? juce::Rectangle<float>(bounds.getX() + 2.0f, bounds.getY() + 1.0f, 12.0f, 13.0f)
-            : juce::Rectangle<float>(bounds.getRight() - 14.0f, bounds.getY() + 2.0f, 12.0f, 13.0f);
+        const bool isCombo = dynamic_cast<const juce::ComboBox*>(child) != nullptr;
+        const bool isButton = dynamic_cast<const juce::Button*>(child) != nullptr;
+        juce::Rectangle<float> badge(bounds.getRight() - 14.0f, bounds.getY() + 2.0f, 12.0f, 13.0f);
+        if (isCombo) badge = juce::Rectangle<float>(bounds.getRight() - 32.0f, bounds.getY() + 2.0f, 12.0f, 13.0f);
+        else if (isLinear) badge = juce::Rectangle<float>(bounds.getRight() - 14.0f, bounds.getY() + 2.0f, 12.0f, 13.0f);
+        else if (isButton) {
+            badge = juce::Rectangle<float>(bounds.getRight() - 13.0f, bounds.getY() + 1.0f, 11.0f, 12.0f);
+            g.setColour(juce::Colour(0xe6152026));
+            g.fillRoundedRectangle(badge.expanded(2.0f, 1.0f), 4.0f);
+        }
         drawPadlock(g, badge);
     }
 }
@@ -109,6 +127,7 @@ ModulePanel::ModulePanel(SausageProcessor& proc, const juce::String& name, const
                          const juce::String& secondaryName, const juce::String& bypassId, juce::Colour color, const juce::String& description)
     : processor(proc), title(name), subtitle(sub), primaryLabel(primaryName), secondaryLabel(secondaryName), hint(description), accent(color),
       amount(proc.parameters.getRawParameterValue(primaryId)), detail(proc.parameters.getRawParameterValue(secondaryId)),
+      satMix(proc.parameters.getRawParameterValue("satMix")),
       moduleBypass(proc.parameters.getRawParameterValue(bypassId)), masterBypass(proc.parameters.getRawParameterValue("bypass")), algorithm(proc.parameters.getRawParameterValue("algorithm")),
       primaryAttachment(proc.parameters, primaryId, primary), secondaryAttachment(proc.parameters, secondaryId, secondary), bypassAttachment(proc.parameters, bypassId, bypass) {
     auto& state = processor.parameters;
@@ -184,7 +203,7 @@ void ModulePanel::paint(juce::Graphics& g) {
     };
     const auto mode = juce::jlimit(0, 3, static_cast<int>(algorithm->load()));
     text(g, mode == 0 ? subtitle : descriptions[mode][kind], {20, 57, 210, 22}, 12.0f, juce::Colour(0xffa3afaf));
-    const bool isModuleActive = (moduleBypass->load() <= 0.5f) && (masterBypass->load() <= 0.5f) && (amount->load() > 0.0f);
+    const bool isModuleActive = isActive();
     const auto ledColor = isModuleActive ? accent : juce::Colour(0xff3b4649);
     g.setColour(ledColor);
     g.fillEllipse(240.0f, 64.0f, 6.0f, 6.0f);
@@ -195,7 +214,7 @@ void ModulePanel::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xff3b4649)); g.drawHorizontalLine(88, 20.0f, 246.0f);
     // Each caption is centred above its control.
     const auto caption = [&g](const juce::String& label, const juce::Component& control) {
-        text(g, label, control.getBounds().withY(control.getY() - 20).withHeight(18), 12.0f, ink, juce::Font::bold, juce::Justification::centred);
+        text(g, label, control.getBounds().withY(control.getY() - 20).withHeight(18), 12.0f, ink.withAlpha(control.getAlpha()), juce::Font::bold, juce::Justification::centred);
     };
     caption(primaryLabel.toUpperCase(), primary);
     caption(secondaryLabel.toUpperCase(), secondary);
@@ -209,10 +228,10 @@ void ModulePanel::paint(juce::Graphics& g) {
     g.setFont(juce::FontOptions(12.0f)); g.setColour(juce::Colour(0xffa3afaf));
     if (kind == 0) g.drawFittedText(hint, {130, 288, 122, 44}, juce::Justification::topLeft, 3);
     if (kind == 3) g.drawFittedText(hint, {132, 350, 112, 30}, juce::Justification::topLeft, 2);
-    const auto value = moduleBypass->load() > 0.5f || masterBypass->load() > 0.5f ? 0.0f : amount->load() / 100.0f;
+    const auto value = isModuleActive ? (kind == 0 ? std::max(amount->load(), detail->load()) / 100.0f * (satMix->load() / 100.0f) : amount->load() / 100.0f) : 0.0f;
     const auto secondaryValue = detail->load() / 100.0f;
     const auto motion = phase * value;
-    g.setColour(value > 0.0f ? accent.darker(0.2f) : juce::Colour(0xff546164));
+    g.setColour(isModuleActive ? accent.darker(0.2f) : juce::Colour(0xff546164));
     if (kind == 0) {
         juce::Path waveform;
         for (int x = 0; x <= 104; ++x) {
@@ -244,10 +263,16 @@ void ModulePanel::paint(juce::Graphics& g) {
 void ModulePanel::paintOverChildren(juce::Graphics& g) {
     paintLockedIndicators(g, *this, processor);
 }
+bool ModulePanel::isActive() const noexcept {
+    if (moduleBypass->load() > 0.5f || masterBypass->load() > 0.5f) return false;
+    if (kind == 0) return (amount->load() > 0.0f || detail->load() > 0.0f) && satMix->load() > 0.0f;
+    if (kind == 2) return amount->load() > 0.0f && detail->load() > 0.0f;
+    return amount->load() > 0.0f;
+}
 void ModulePanel::setBeatPhase(float position) {
-    const bool bypassed = moduleBypass->load() > 0.5f || masterBypass->load() > 0.5f;
-    const auto value = bypassed ? 0.0f : amount->load();
-    const std::array<float, 2> header {algorithm->load(), value > 0.0f ? 1.0f : 0.0f};
+    const bool active = isActive();
+    const auto value = active ? (kind == 0 ? std::max(amount->load(), detail->load()) * (satMix->load() / 100.0f) : amount->load()) : 0.0f;
+    const std::array<float, 2> header {algorithm->load(), active ? 1.0f : 0.0f};
     const std::array<float, 3> display {value, detail->load(), position * value};
     if (header != shownHeader) repaint(20, 57, 232, 22);
     if (display != shownDisplay) repaint(130, 378, 122, 34);
@@ -348,32 +373,56 @@ float SausageEditor::animationPhase() const noexcept {
     return (phase >= 0.0f ? phase : static_cast<float>(idle)) * juce::MathConstants<float>::twoPi;
 }
 bool SausageEditor::keyPressed(const juce::KeyPress& key) {
+    if (!key.getModifiers().isCommandDown()) return false;
     const auto text = juce::CharacterFunctions::toLowerCase(key.getTextCharacter());
     const auto code = key.getKeyCode();
     const bool isZ = text == 'z' || code == 'z' || code == 'Z';
-    if (!isZ || !key.getModifiers().isCommandDown()) return false;
-    if (key.getModifiers().isShiftDown()) ownerProcessor.history.redo();
+    const bool isY = text == 'y' || code == 'y' || code == 'Y';
+    if (!isZ && !isY) return false;
+    if (isY || key.getModifiers().isShiftDown()) ownerProcessor.history.redo();
     else ownerProcessor.history.undo();
     suite.refresh();
     return true;
 }
-void SausageEditor::timerCallback() {
-    suite.refresh();
-    for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel}) {
-        p->setBeatPhase(animationPhase());
+bool SausageEditor::isCompressionDimmed() const noexcept {
+    return ownerProcessor.parameters.getRawParameterValue("bypass")->load() > 0.5f
+        || ownerProcessor.parameters.getRawParameterValue("sausageBypass")->load() > 0.5f
+        || ownerProcessor.parameters.getRawParameterValue("fatness")->load() <= 0.0f
+        || ownerProcessor.parameters.getRawParameterValue("satDynamics")->load() <= 0.0f
+        || ownerProcessor.parameters.getRawParameterValue("masterMix")->load() <= 0.0f;
+}
+void SausageEditor::updateDimming() {
+    for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel})
         p->dimInactive();
-    }
     const auto off = ownerProcessor.parameters.getRawParameterValue("bypass")->load() > 0.5f ? masterBypassHint : juce::String();
     const bool dry = ownerProcessor.parameters.getRawParameterValue("masterMix")->load() <= 0.0f;
     showEffect(output, off, dry, "Raise Rack mix to hear this.");
     showEffect(softClip, off, dry, "Raise Rack mix to hear this.");
     showEffect(masterMix, off, false, {});
     showEffect(algorithms, off, false, {});
-    content.repaint(20, 4, 175, 160);
+}
+void SausageEditor::timerCallback() {
+    suite.refresh();
+    const float phase = animationPhase();
+    for (auto* p : {&sausagePanel, &spacePanel, &risePanel, &widthPanel})
+        p->setBeatPhase(phase);
+    updateDimming();
+    const bool sausageBypassed = ownerProcessor.parameters.getRawParameterValue("sausageBypass")->load() > 0.5f
+                             || ownerProcessor.parameters.getRawParameterValue("bypass")->load() > 0.5f;
+    const float fat = sausageBypassed ? 0.0f : ownerProcessor.parameters.getRawParameterValue("fatness")->load() / 100.0f;
+    if (const std::pair<float, float> grillState {phase, fat}; grillState != lastGrillState) {
+        lastGrillState = grillState;
+        content.repaint(20, 4, 175, 160);
+    }
     const auto now = juce::Time::getMillisecondCounterHiRes();
     inputMeter.push(ownerProcessor.inputPeak.exchange(0.0f), now);
     outputMeter.push(ownerProcessor.outputPeak.exchange(0.0f), now);
-    content.repaint(738, 646, 126, 28);
+    const int gainReductionTenths = static_cast<int>(std::lround(ownerProcessor.gainReduction.load(std::memory_order_relaxed) * 10.0f));
+    const bool compressionDimmed = isCompressionDimmed();
+    if (const std::pair<int, bool> compressionState {gainReductionTenths, compressionDimmed}; compressionState != lastCompressionState) {
+        lastCompressionState = compressionState;
+        content.repaint(738, 623, 126, 51);
+    }
     if (const auto mask = lockMask(); mask != lastLockMask) {
         lastLockMask = mask;
         content.repaint();
@@ -450,10 +499,11 @@ void SausageEditor::paintContent(juce::Graphics& g) {
     text(g, "ALAN MARCERO", {930, 31, 196, 24}, 15.0f, ink, juce::Font::bold, juce::Justification::centredRight);
     g.setColour(juce::Colour(0xf00c1418)); g.fillRect(0, 596, designWidth, designHeight - 596);
     g.setColour(juce::Colour(0xff48f0c8).withAlpha(0.4f)); g.drawHorizontalLine(596, 24, 1136);
-    text(g, "Wet trim", output.getBounds().withY(output.getY() - 20).withHeight(18), 13.0f, cream, juce::Font::bold, juce::Justification::centred);
-    text(g, "Rack mix", masterMix.getBounds().withY(masterMix.getY() - 20).withHeight(18), 13.0f, cream, juce::Font::bold, juce::Justification::centred);
-    text(g, "Compression", {738, 623, 126, 22}, 13.0f, cream, juce::Font::bold);
-    text(g, juce::String(ownerProcessor.gainReduction.load(std::memory_order_relaxed), 1) + " dB", {738, 646, 126, 28}, 21.0f, juce::Colour(0xffffbe3b), juce::Font::bold);
+    const bool compressionDimmed = isCompressionDimmed();
+    text(g, "WET TRIM", output.getBounds().withY(output.getY() - 20).withHeight(18), 12.0f, cream.withAlpha(output.getAlpha()), juce::Font::bold, juce::Justification::centred);
+    text(g, "RACK MIX", masterMix.getBounds().withY(masterMix.getY() - 20).withHeight(18), 12.0f, cream.withAlpha(masterMix.getAlpha()), juce::Font::bold, juce::Justification::centred);
+    text(g, "COMPRESSION", {738, 623, 126, 22}, 12.0f, cream.withAlpha(compressionDimmed ? 0.4f : 1.0f), juce::Font::bold);
+    text(g, juce::String(ownerProcessor.gainReduction.load(std::memory_order_relaxed), 1) + " dB", {738, 646, 126, 28}, 21.0f, juce::Colour(0xffffbe3b).withAlpha(compressionDimmed ? 0.4f : 1.0f), juce::Font::bold);
     g.setColour(juce::Colour(0xff3b474a)); g.drawHorizontalLine(715, 24, 1136);
     for (const auto point : {juce::Point<float>(10, 10), juce::Point<float>(1150, 10), juce::Point<float>(10, 600), juce::Point<float>(1150, 600)}) {
         g.setColour(ink.withAlpha(0.45f)); g.fillEllipse(point.x - 3, point.y - 3, 6, 6);

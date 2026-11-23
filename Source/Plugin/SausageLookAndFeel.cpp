@@ -11,6 +11,11 @@ struct DimWhenDisabled {
     }
     juce::Graphics* graphics;
 };
+void drawFocusRing(juce::Graphics& g, const juce::Component& control) {
+    if (!control.hasKeyboardFocus(false)) return;
+    g.setColour(juce::Colour(0xff48f0c8));
+    g.drawRoundedRectangle(control.getLocalBounds().toFloat().reduced(1.0f), 5.0f, 1.5f);
+}
 }
 
 SausageLookAndFeel::SausageLookAndFeel() {
@@ -23,6 +28,9 @@ SausageLookAndFeel::SausageLookAndFeel() {
     setColour(juce::Slider::textBoxTextColourId, juce::Colour(0xffe6f0f5));
     setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xff152026));
     setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    setColour(juce::Slider::thumbColourId, juce::Colour(0xff48f0c8));
+    setColour(juce::Slider::trackColourId, juce::Colour(0xff48f0c8));
+    setColour(juce::Slider::backgroundColourId, juce::Colour(0xff283842));
     setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff152026));
     setColour(juce::ComboBox::textColourId, juce::Colour(0xffe6f0f5));
     setColour(juce::ComboBox::outlineColourId, juce::Colour(0xff283842));
@@ -65,16 +73,19 @@ void SausageLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int w
     g.setColour(accent);
     g.drawLine({center + direction * (radius * 0.38f), center + direction * (radius * 0.77f)}, 4.0f);
     g.fillEllipse(center.x - 3.0f, center.y - 3.0f, 6.0f, 6.0f);
+    drawFocusRing(g, slider);
 }
 void SausageLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width, int height, float position, float minimum, float maximum,
                                           juce::Slider::SliderStyle style, juce::Slider& slider) {
     const DimWhenDisabled dim(g, slider);
     LookAndFeel_V4::drawLinearSlider(g, x, y, width, height, position, minimum, maximum, style, slider);
+    drawFocusRing(g, slider);
 }
 void SausageLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, bool down, int buttonX, int buttonY, int buttonWidth, int buttonHeight,
                                       juce::ComboBox& box) {
     const DimWhenDisabled dim(g, box);
     LookAndFeel_V4::drawComboBox(g, width, height, down, buttonX, buttonY, buttonWidth, buttonHeight, box);
+    drawFocusRing(g, box);
 }
 void SausageLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& button, const juce::Colour&, bool over, bool down) {
     over = over || button.hasKeyboardFocus(false);

@@ -3,6 +3,24 @@
 #include "SausageLookAndFeel.h"
 #include "SuiteBar.h"
 
+// Guards mouse events when right-clicking so only the parameter lock menu opens.
+template <typename Base>
+struct LockableControl final : Base {
+    using Base::Base;
+    void mouseDown(const juce::MouseEvent& e) override {
+        if (e.mods.isPopupMenu()) return;
+        Base::mouseDown(e);
+    }
+    void mouseDrag(const juce::MouseEvent& e) override {
+        if (e.mods.isPopupMenu()) return;
+        Base::mouseDrag(e);
+    }
+    void mouseUp(const juce::MouseEvent& e) override {
+        if (e.mods.isPopupMenu()) return;
+        Base::mouseUp(e);
+    }
+};
+
 class ModulePanel final : public juce::Component {
 public:
     ModulePanel(SausageProcessor&, const juce::String& title, const juce::String& subtitle,
@@ -16,11 +34,13 @@ public:
     // Dims the controls whose setting has no effect right now.
     void dimInactive();
 private:
+    bool isActive() const noexcept;
     SausageProcessor& processor;
     juce::String title, subtitle, primaryLabel, secondaryLabel, hint;
     juce::Colour accent;
     std::atomic<float>* amount;
     std::atomic<float>* detail;
+    std::atomic<float>* satMix;
     std::atomic<float>* moduleBypass;
     std::atomic<float>* masterBypass;
     std::atomic<float>* algorithm;
@@ -28,9 +48,9 @@ private:
     float phase = 0.0f;
     std::array<float, 2> shownHeader {-1.0f, -1.0f};
     std::array<float, 3> shownDisplay {-1.0f, -1.0f, -1.0f};
-    juce::Slider primary, secondary, saturationMix, dynamics, preDelay;
-    juce::ComboBox focus, riseLength;
-    juce::TextButton bypass;
+    LockableControl<juce::Slider> primary, secondary, saturationMix, dynamics, preDelay;
+    LockableControl<juce::ComboBox> focus, riseLength;
+    LockableControl<juce::TextButton> bypass;
     juce::AudioProcessorValueTreeState::SliderAttachment primaryAttachment, secondaryAttachment;
     juce::AudioProcessorValueTreeState::ButtonAttachment bypassAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> saturationMixAttachment, dynamicsAttachment, preDelayAttachment;
@@ -60,6 +80,7 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
     bool keyPressed(const juce::KeyPress&) override;
+    void updateDimming();
 private:
     // Holds every control at the design size. The editor scales it uniformly.
     struct Content final : juce::Component {
@@ -77,19 +98,22 @@ private:
     void paintContent(juce::Graphics&);
     void paintContentOverChildren(juce::Graphics&);
     uint32_t lockMask() const noexcept;
+    bool isCompressionDimmed() const noexcept;
     SausageProcessor& ownerProcessor;
     Content content {*this};
     ParamLockListener lockListener {*this};
     uint32_t lastLockMask = 0;
+    std::pair<float, float> lastGrillState {-1.0f, -1.0f};
+    std::pair<int, bool> lastCompressionState {-1, false};
     SausageLookAndFeel look;
     std::unique_ptr<juce::Drawable> grill;
     juce::Image enamel;
     float animationPhase() const noexcept;
     ModulePanel sausagePanel, spacePanel, risePanel, widthPanel;
-    juce::Slider output, masterMix;
+    LockableControl<juce::Slider> output, masterMix;
     LevelMeter inputMeter {"INPUT"}, outputMeter {"OUTPUT"};
-    juce::TextButton bypass, softClip{"Soft Clip"};
-    juce::ComboBox algorithms;
+    LockableControl<juce::TextButton> bypass, softClip{"Soft Clip"};
+    LockableControl<juce::ComboBox> algorithms;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> algorithmAttachment;
     juce::AudioProcessorValueTreeState::SliderAttachment outputAttachment, masterMixAttachment;
     juce::AudioProcessorValueTreeState::ButtonAttachment bypassAttachment, softClipAttachment;
