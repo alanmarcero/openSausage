@@ -34,15 +34,19 @@ void showEffect(juce::Component& control, const juce::String& off, bool hasNoEff
             if (childTips->getTooltip() != tooltip)
                 childTips->setTooltip(tooltip);
 }
+void setSliderAccent(juce::Slider& slider, juce::Colour accent, bool bypassed) {
+    const auto colour = bypassed ? juce::Colour(0xff6b7e84) : accent;
+    slider.setColour(juce::Slider::rotarySliderFillColourId, colour);
+    slider.setColour(juce::Slider::thumbColourId, colour);
+    slider.setColour(juce::Slider::trackColourId, colour);
+}
 void dial(juce::Slider& slider, const juce::String& id, juce::Colour accent) {
     slider.setComponentID(id);
     slider.setName(id);
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setRotaryParameters(juce::MathConstants<float>::pi * 1.25f, juce::MathConstants<float>::pi * 2.75f, true);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 76, 24);
-    slider.setColour(juce::Slider::rotarySliderFillColourId, accent);
-    slider.setColour(juce::Slider::thumbColourId, accent);
-    slider.setColour(juce::Slider::trackColourId, accent);
+    setSliderAccent(slider, accent, false);
     slider.setNumDecimalPlacesToDisplay(1);
     slider.setColour(juce::Slider::textBoxTextColourId, ink);
     slider.setColour(juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
@@ -138,18 +142,18 @@ void LevelMeter::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(clipColour));
     g.fillRoundedRectangle(154.0f, 22.0f, 5.0f, 16.0f, 1.0f);
     if (bypassed) {
-        const juce::Rectangle<float> badge(48.0f, 23.0f, 64.0f, 14.0f);
-        g.setColour(juce::Colour(0xe610181c));
-        g.fillRoundedRectangle(badge, 3.0f);
-        g.setColour(juce::Colour(0xff546164));
-        g.drawRoundedRectangle(badge, 3.0f, 1.0f);
-        text(g, "BYPASSED", badge.toNearestInt(), 9.5f, juce::Colour(0xffd8b15a), juce::Font::bold, juce::Justification::centred);
+        const juce::Rectangle<float> badge(41.0f, 21.0f, 78.0f, 18.0f);
+        g.setColour(juce::Colour(0xf50d1519));
+        g.fillRoundedRectangle(badge, 4.0f);
+        g.setColour(juce::Colour(0xff8f7a4a));
+        g.drawRoundedRectangle(badge, 4.0f, 1.0f);
+        text(g, "BYPASSED", badge.toNearestInt(), 10.5f, juce::Colour(0xffe8c266), juce::Font::bold, juce::Justification::centred);
     }
     constexpr std::array<std::pair<int, const char*>, 3> ticks {{{92, "-24"}, {123, "-12"}, {151, "0"}}};
     for (const auto& [tickX, tickLabel] : ticks) {
-        g.setColour(juce::Colour(0xff55676e));
-        g.drawVerticalLine(tickX, 40.0f, 43.0f);
-        text(g, tickLabel, {tickX - 13, 43, 26, 13}, 10.5f, juce::Colour(0xff96aab3), juce::Font::plain, juce::Justification::centred);
+        g.setColour(juce::Colour(0xff738790));
+        g.drawVerticalLine(tickX, 40.0f, 43.5f);
+        text(g, tickLabel, {tickX - 14, 44, 28, 15}, 11.5f, juce::Colour(0xffb4c7d0), juce::Font::plain, juce::Justification::centred);
     }
 }
 void LevelMeter::mouseDown(const juce::MouseEvent&) {
@@ -217,9 +221,10 @@ void ModulePanel::paint(juce::Graphics& g) {
     const auto bounds = getLocalBounds().toFloat().reduced(1);
     g.setGradientFill(juce::ColourGradient(panel.brighter(0.08f), bounds.getTopLeft(), panel.darker(0.16f), bounds.getBottomLeft(), false));
     g.fillRoundedRectangle(bounds, 8.0f);
-    g.setColour(accent.withAlpha(0.4f)); g.drawRoundedRectangle(bounds, 8.0f, 1.0f);
+    const bool isBypassed = moduleBypass->load() > 0.5f || masterBypass->load() > 0.5f;
+    g.setColour(isBypassed ? juce::Colour(0xff3b4649) : accent.withAlpha(0.4f)); g.drawRoundedRectangle(bounds, 8.0f, 1.0f);
     g.setColour(cream.withAlpha(0.06f)); g.drawHorizontalLine(2, 10.0f, bounds.getRight() - 10.0f);
-    g.setColour(accent); g.fillRoundedRectangle(16.0f, 16.0f, 4.0f, 34.0f, 2.0f);
+    g.setColour(isBypassed ? juce::Colour(0xff546164) : accent); g.fillRoundedRectangle(16.0f, 16.0f, 4.0f, 34.0f, 2.0f);
     text(g, title, {28, 16, 120, 36}, 29.0f, ink, juce::Font::bold);
     constexpr const char* descriptions[4][4] {
         {"SATURATION + COMPRESSION", "STEREO REVERB", "PITCH + BUILDUP", "STEREO WIDENER"},
@@ -228,7 +233,7 @@ void ModulePanel::paint(juce::Graphics& g) {
         {"WAVEFOLD SATURATION", "BRIGHT HALL", "FEEDBACK RISE", "MOVING WIDTH"}
     };
     const auto mode = juce::jlimit(0, 3, static_cast<int>(algorithm->load()));
-    text(g, mode == 0 ? subtitle : descriptions[mode][kind], {20, 57, 210, 22}, 12.0f, juce::Colour(0xffa3afaf));
+    text(g, mode == 0 ? subtitle : descriptions[mode][kind], {20, 57, 210, 22}, 12.5f, juce::Colour(0xffc2d2d6));
     const bool isModuleActive = isActive();
     const auto ledColor = isModuleActive ? accent : juce::Colour(0xff3b4649);
     g.setColour(ledColor);
@@ -240,7 +245,7 @@ void ModulePanel::paint(juce::Graphics& g) {
     g.setColour(juce::Colour(0xff3b4649)); g.drawHorizontalLine(88, 20.0f, 246.0f);
     // Each caption is centred above its control.
     const auto caption = [&g](const juce::String& label, const juce::Component& control) {
-        text(g, label, control.getBounds().withY(control.getY() - 20).withHeight(18), 12.0f, ink.withAlpha(control.getAlpha()), juce::Font::bold, juce::Justification::centred);
+        text(g, label, control.getBounds().withY(control.getY() - 20).withHeight(19), 13.0f, juce::Colour(0xfff0f7fa).withAlpha(control.getAlpha()), juce::Font::bold, juce::Justification::centred);
     };
     caption(primaryLabel.toUpperCase(), primary);
     caption(secondaryLabel.toUpperCase(), secondary);
@@ -317,17 +322,25 @@ void ModulePanel::dimInactive() {
     juce::String off;
     if (moduleBypass->load() > 0.5f) off = "Turn on " + title + " to use this.";
     if (masterBypass->load() > 0.5f) off = masterBypassHint;
+    const bool bypassed = off.isNotEmpty();
+    setSliderAccent(primary, accent, bypassed);
+    setSliderAccent(secondary, accent, bypassed);
     const bool amountIsZero = amount->load() <= 0.0f, detailIsZero = detail->load() <= 0.0f;
     const auto raise = [](const juce::String& knob) { return "Raise " + knob + " to hear this."; };
     showEffect(primary, off, kind == 2 && detailIsZero, raise(secondaryLabel));
     showEffect(secondary, off, (kind == 1 || kind == 3) && amountIsZero, raise(primaryLabel));
     showEffect(bypass, masterBypass->load() > 0.5f ? masterBypassHint : juce::String(), false, {});
     if (kind == 0) {
+        setSliderAccent(saturationMix, accent, bypassed);
+        setSliderAccent(dynamics, accent, bypassed);
         showEffect(saturationMix, off, amountIsZero && detailIsZero, "Raise Fatness or Color to hear this.");
         showEffect(dynamics, off, amountIsZero, raise(primaryLabel));
         showEffect(focus, off, amountIsZero, raise(primaryLabel));
     }
-    if (kind == 1) showEffect(preDelay, off, amountIsZero, raise(primaryLabel));
+    if (kind == 1) {
+        setSliderAccent(preDelay, accent, bypassed);
+        showEffect(preDelay, off, amountIsZero, raise(primaryLabel));
+    }
     if (kind == 2) showEffect(riseLength, off, detailIsZero, raise(secondaryLabel));
 }
 void ModulePanel::resized() {
@@ -438,6 +451,9 @@ void SausageEditor::updateDimming() {
     inputMeter.setBypassed(rackBypassed);
     outputMeter.setBypassed(rackBypassed);
     const auto off = ownerProcessor.parameters.getRawParameterValue("bypass")->load() > 0.5f ? masterBypassHint : juce::String();
+    const bool masterBypassed = off.isNotEmpty();
+    setSliderAccent(output, juce::Colour(0xffffbe3b), masterBypassed);
+    setSliderAccent(masterMix, juce::Colour(0xff48f0c8), masterBypassed);
     const bool dry = ownerProcessor.parameters.getRawParameterValue("masterMix")->load() <= 0.0f;
     showEffect(output, off, dry, "Raise Rack mix to hear this.");
     showEffect(softClip, off, dry, "Raise Rack mix to hear this.");
@@ -536,19 +552,22 @@ void SausageEditor::paintContent(juce::Graphics& g) {
     }
     text(g, "openSausage", {186, 30, 480, 56}, 46.0f, ink, juce::Font::bold);
     text(g, "Saturation / Space / Pitch / Stereo", {190, 94, 330, 25}, 14.0f, ink, juce::Font::bold);
-    text(g, "v" JucePlugin_VersionString, {190, 121, 150, 20}, 13.0f, juce::Colour(0xffa8bcc6));
-    text(g, "Algorithm", {532, 81, 145, 20}, 14.0f, ink, juce::Font::bold);
-    text(g, "Preset", {706, 81, 412, 20}, 14.0f, ink, juce::Font::bold);
+    text(g, "v" JucePlugin_VersionString, {190, 121, 150, 20}, 14.0f, juce::Colour(0xffc6d6de));
+    text(g, "Algorithm", {532, 79, 145, 21}, 15.0f, juce::Colour(0xfff0f6fa), juce::Font::bold);
+    text(g, "Preset", {706, 79, 412, 21}, 15.0f, juce::Colour(0xfff0f6fa), juce::Font::bold);
     text(g, "ALAN MARCERO", {930, 31, 196, 24}, 15.0f, ink, juce::Font::bold, juce::Justification::centredRight);
-    g.setColour(juce::Colour(0xf00c1418)); g.fillRect(0, 596, designWidth, designHeight - 596);
-    g.setColour(juce::Colour(0xff48f0c8).withAlpha(0.4f)); g.drawHorizontalLine(596, 24, 1136);
+    g.setColour(juce::Colour(0xf00c1418)); g.fillRect(0, 592, designWidth, designHeight - 592);
+    g.setColour(juce::Colour(0xff48f0c8).withAlpha(0.4f)); g.drawHorizontalLine(592, 24, 1136);
+    const float gr = ownerProcessor.gainReduction.load(std::memory_order_relaxed);
     const bool compressionDimmed = isCompressionDimmed();
-    text(g, "WET TRIM", output.getBounds().withY(output.getY() - 20).withHeight(18), 12.0f, cream.withAlpha(output.getAlpha()), juce::Font::bold, juce::Justification::centred);
-    text(g, "RACK MIX", masterMix.getBounds().withY(masterMix.getY() - 20).withHeight(18), 12.0f, cream.withAlpha(masterMix.getAlpha()), juce::Font::bold, juce::Justification::centred);
-    text(g, "COMPRESSION", {738, 623, 126, 22}, 12.0f, cream.withAlpha(compressionDimmed ? 0.4f : 1.0f), juce::Font::bold);
-    text(g, juce::String(ownerProcessor.gainReduction.load(std::memory_order_relaxed), 1) + " dB", {738, 646, 126, 28}, 21.0f, juce::Colour(0xffffbe3b).withAlpha(compressionDimmed ? 0.4f : 1.0f), juce::Font::bold);
-    g.setColour(juce::Colour(0xff3b474a)); g.drawHorizontalLine(715, 24, 1136);
-    for (const auto point : {juce::Point<float>(10, 10), juce::Point<float>(1150, 10), juce::Point<float>(10, 600), juce::Point<float>(1150, 600)}) {
+    const bool grActive = !compressionDimmed && gr > 0.05f;
+    const auto grColour = (grActive ? juce::Colour(0xffffbe3b) : juce::Colour(0xff7e929c)).withAlpha(compressionDimmed ? 0.4f : 1.0f);
+    text(g, "WET TRIM", output.getBounds().withY(output.getY() - 18).withHeight(18), 13.0f, juce::Colour(0xfff0f7fa).withAlpha(output.getAlpha()), juce::Font::bold, juce::Justification::centred);
+    text(g, "RACK MIX", masterMix.getBounds().withY(masterMix.getY() - 18).withHeight(18), 13.0f, juce::Colour(0xfff0f7fa).withAlpha(masterMix.getAlpha()), juce::Font::bold, juce::Justification::centred);
+    text(g, "COMPRESSION", {738, 623, 126, 22}, 13.0f, juce::Colour(0xfff0f7fa).withAlpha(compressionDimmed ? 0.4f : 1.0f), juce::Font::bold);
+    text(g, juce::String(gr, 1) + " dB", {738, 646, 126, 28}, 21.0f, grColour, juce::Font::bold);
+    g.setColour(juce::Colour(0xff3b474a)); g.drawHorizontalLine(711, 24, 1136);
+    for (const auto point : {juce::Point<float>(10, 10), juce::Point<float>(1150, 10), juce::Point<float>(10, 598), juce::Point<float>(1150, 598)}) {
         g.setColour(ink.withAlpha(0.45f)); g.fillEllipse(point.x - 3, point.y - 3, 6, 6);
         g.setColour(juce::Colour(0xffd8b15a)); g.drawLine(point.x - 2, point.y, point.x + 2, point.y, 1);
     }
@@ -558,10 +577,10 @@ void SausageEditor::resized() {
     ownerProcessor.editorWidth = getWidth();
     sausagePanel.setBounds(24, 172, 266, 415); spacePanel.setBounds(306, 172, 266, 415);
     risePanel.setBounds(588, 172, 266, 415); widthPanel.setBounds(870, 172, 266, 415);
-    output.setBounds(400, 618, 100, 96); masterMix.setBounds(520, 618, 100, 96);
+    output.setBounds(394, 611, 114, 100); masterMix.setBounds(528, 611, 114, 100);
     softClip.setBounds(864, 633, 112, 36); bypass.setBounds(986, 633, 146, 36);
-    inputMeter.setBounds(30, 622, 162, 58); outputMeter.setBounds(214, 622, 162, 58);
+    inputMeter.setBounds(30, 620, 162, 62); outputMeter.setBounds(214, 620, 162, 62);
     algorithms.setBounds(532, 104, 158, 36);
-    suite.setBounds(0, 716, 1160, 44);
+    suite.setBounds(0, 712, 1160, 48);
     suite.presetRow.setBounds(706, 102, 426, 66);
 }

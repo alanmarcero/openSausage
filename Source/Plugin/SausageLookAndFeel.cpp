@@ -128,9 +128,9 @@ void SausageLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& b
         const auto enabled = button.getToggleState();
         g.setColour(juce::Colour(over || down ? 0xff2a3b40 : 0xff182429));
         g.fillRoundedRectangle(bounds, 5.0f);
-        g.setColour(enabled ? juce::Colour(0xff48f0c8) : juce::Colour(0xff283842));
+        g.setColour(enabled ? juce::Colour(0xff48f0c8) : juce::Colour(0xff354852));
         g.drawRoundedRectangle(bounds, 5.0f, 1.0f);
-        g.setColour(enabled ? juce::Colour(0xff48f0c8) : juce::Colour(0xff536266));
+        g.setColour(enabled ? juce::Colour(0xff48f0c8) : juce::Colour(0xff7a8e96));
         g.fillEllipse(10.0f, static_cast<float>(button.getHeight()) / 2.0f - 3.0f, 6.0f, 6.0f);
         return;
     }
@@ -167,7 +167,7 @@ void SausageLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& but
     }
     const DimWhenDisabled dim(g, button);
     if (button.getComponentID() == "softClip") {
-        g.setColour(button.getToggleState() ? juce::Colour(0xff48f0c8) : juce::Colour(0xff869ca8));
+        g.setColour(button.getToggleState() ? juce::Colour(0xff48f0c8) : juce::Colour(0xffc2d2da));
         g.setFont(juce::FontOptions(14.0f, juce::Font::bold));
         g.drawText("Soft clip", button.getLocalBounds().withTrimmedLeft(20), juce::Justification::centred);
         return;

@@ -8,7 +8,7 @@ void styleSearch(juce::TextEditor& editor) {
     editor.setColour(juce::TextEditor::outlineColourId, juce::Colour(0xff3b505b));
     editor.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour(0xff48f0c8));
     editor.setJustification(juce::Justification::centredLeft);
-    editor.setIndents(10, 4);
+    editor.setIndents(12, 6);
     editor.setFont(juce::FontOptions(14.0f));
 }
 }
@@ -105,28 +105,28 @@ void SuiteBar::paint(juce::Graphics& graphics) {
 }
 void SuiteBar::resized() {
     // The right end stays clear of the editor's resize corner.
-    auto row = getLocalBounds().reduced(8, 4).withTrimmedRight(32);
+    auto row = getLocalBounds().reduced(10, 5).withTrimmedRight(32);
     const auto take = [&row](int width) {
         const auto area = row.removeFromLeft(width);
-        row.removeFromLeft(4);
+        row.removeFromLeft(6);
         return area;
     };
     undo.setBounds(take(58));
     redo.setBounds(take(58));
-    row.removeFromLeft(10);
+    row.removeFromLeft(12);
     slotA.setBounds(take(40));
     slotB.setBounds(take(40));
     copyAToB.setBounds(take(102));
     copyBToA.setBounds(take(102));
-    row.removeFromLeft(10);
-    search.setBounds(take(192));
+    row.removeFromLeft(12);
+    search.setBounds(take(188));
     row.removeFromLeft(10);
     deleteButton.setBounds(row.removeFromRight(74));
-    row.removeFromRight(4);
-    renameButton.setBounds(row.removeFromRight(80));
-    row.removeFromRight(4);
-    save.setBounds(row.removeFromRight(76));
     row.removeFromRight(6);
+    renameButton.setBounds(row.removeFromRight(80));
+    row.removeFromRight(6);
+    save.setBounds(row.removeFromRight(76));
+    row.removeFromRight(8);
     name.setBounds(row);
 }
 const PresetLibrary::Entry* SuiteBar::selected() const {
