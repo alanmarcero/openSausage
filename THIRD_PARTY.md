@@ -1,6 +1,6 @@
 # Third-party software and attribution
 
-- **JUCE 8.0.9**: https://github.com/juce-framework/JUCE/tree/8.0.9 — AGPL-3.0 or a separate commercial JUCE license. JUCE's own terms are unchanged and still apply to the JUCE code. openSausage's own code is MIT. JUCE includes its own third-party notices and the Steinberg VST3 SDK notices in its source distribution.
+- **JUCE 8.0.9**: https://github.com/juce-framework/JUCE/tree/8.0.9 — AGPL-3.0 or a separate commercial JUCE license. This repository uses the AGPL-3.0 option (see LICENSE). JUCE includes its own third-party notices and the Steinberg VST3 SDK notices in its source distribution.
 - **Catch2 3.9.1**: https://github.com/catchorg/Catch2/tree/v3.9.1 — Boost Software License 1.0. Test dependency only.
 - **pluginval 1.0.4**: https://github.com/Tracktion/pluginval/releases/tag/v1.0.4 — GPL-3.0. Downloaded for validation only; not included in the plugin.
 - **Artwork**: `assets/sausage.png`, `assets/sausage-expressions.png`, and `assets/enamel.png` were generated for openSausage using the built-in image generation tool. Prompts are recorded in `assets/PROMPTS.md` and `assets/EXPRESSION-PROMPT.md`.
