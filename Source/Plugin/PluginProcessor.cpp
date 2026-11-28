@@ -73,6 +73,9 @@ SausageProcessor::SausageProcessor(juce::File presetFolder)
         if (!compare.label().edited) compare.relabel({compare.label().name, true});
     };
 }
+SausageProcessor::~SausageProcessor() {
+    cancelPendingUpdate();
+}
 // A host can change the program on the audio thread. The label then follows on the message thread.
 void SausageProcessor::handleAsyncUpdate() {
     compare.setLabel({factoryRecipes()[static_cast<std::size_t>(currentProgram)].name, false});

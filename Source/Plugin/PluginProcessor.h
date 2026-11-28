@@ -16,6 +16,7 @@ struct SausageRecipe {
 class SausageProcessor final : public juce::AudioProcessor, private juce::AsyncUpdater {
 public:
     explicit SausageProcessor(juce::File presetFolder = PresetLibrary::userDirectory("openSausage"));
+    ~SausageProcessor() override;
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
     bool isBusesLayoutSupported(const BusesLayout&) const override;
