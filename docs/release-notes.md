@@ -1,3 +1,7 @@
+# openSausage 1.11.4
+
+- **Lifecycle safety:** Cancels pending `AsyncUpdater` notifications in `~SausageProcessor()`.
+
 # openSausage 1.11.3
 
 - **Editor polish:** Refines lock badges, focus rings, suite controls, and the preset browser, with refreshed screenshots.
